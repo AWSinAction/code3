@@ -52,12 +52,12 @@ Resources:
       SubnetId: !Ref SubnetB
       RouteTableId: !Ref RouteTable
   RoutePublicNATToInternet:
+    DependsOn: VPCGatewayAttachment
     Type: 'AWS::EC2::Route'
     Properties:
       RouteTableId: !Ref RouteTable
       DestinationCidrBlock: '0.0.0.0/0'
       GatewayId: !Ref InternetGateway
-    DependsOn: VPCGatewayAttachment
   NetworkAcl:
     Type: 'AWS::EC2::NetworkAcl'
     Properties:
@@ -111,6 +111,7 @@ Resources:
         ToPort: 3000
         IpProtocol: tcp
   LoadBalancer:
+    DependsOn: VPCGatewayAttachment
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
       IpAddressType: 'ipv4'
@@ -254,8 +255,6 @@ Resources:
       Memory: 1024
       NetworkMode: awsvpc
       RequiresCompatibilities: [FARGATE]
-      RuntimePlatform:
-        CpuArchitecture: ARM64
       TaskRoleArn: !GetAtt 'TaskRole.Arn'
   LogGroup:
     Type: 'AWS::Logs::LogGroup'
