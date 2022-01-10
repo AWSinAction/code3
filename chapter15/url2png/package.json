@@ -2,7 +2,7 @@
  "dependencies": {
   "aws-sdk": "2.1053.0",
   "uuid": "8.3.2",
-  "node-webshot": "1.0.4"
+  "puppeteer": "13.0.1"
  },
  "devDependencies": {
   "eslint": "8.6.0"
