@@ -2,10 +2,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AWS in Action: chapter 17 (URL2PNG)'
 Parameters:
-  KeyName:
-    Description: 'Key Pair name'
-    Type: 'AWS::EC2::KeyPair::KeyName'
-    Default: mykey
   ApplicationID:
     Description: 'A unique identifier for your application.'
     Type: String
@@ -158,6 +154,16 @@ Resources:
           - Effect: Allow
             Action: 'sqs:*'
             Resource: !Sub 'arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${SQSQueue.QueueName}'
+      - PolicyName: ssm
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            Resource: '*'
   IamInstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
@@ -173,32 +179,45 @@ Resources:
     Type: 'AWS::SQS::Queue'
     Properties:
       QueueName: url2png
-  LaunchConfiguration:
-    Type: 'AWS::AutoScaling::LaunchConfiguration'
+  LaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
     Properties:
-      AssociatePublicIpAddress: true
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceMonitoring: false
-      InstanceType: t2.micro
-      SecurityGroups:
-      - !Ref SecurityGroup
-      KeyName: !Ref KeyName
-      IamInstanceProfile: !Ref IamInstanceProfile
-      UserData:
-        'Fn::Base64': !Sub |
-          #!/bin/bash -ex
-          curl -sL https://rpm.nodesource.com/setup_14.x | bash -
-          yum install -y nodejs
-          wget -q -T 60 https://github.com/AWSinAction/code3/archive/master.zip
-          unzip master.zip
-          cd code2-master/chapter15/url2png/
-          npm install
-          echo "{\"QueueUrl\": \"${SQSQueue}\", \"Bucket\": \"${ApplicationID}\"}" > config.json
-          node worker.js
+      LaunchTemplateData:
+        BlockDeviceMappings:
+        - DeviceName: '/dev/xvda'
+          Ebs:
+            Encrypted: true
+            VolumeType: gp3
+        IamInstanceProfile:
+          Name: !Ref IamInstanceProfile
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        Monitoring:
+          Enabled: false
+        InstanceType: 't2.micro'
+        MetadataOptions:
+          HttpTokens: required
+        NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          Groups:
+          - !Ref SecurityGroup
+        UserData:
+          'Fn::Base64': !Sub |
+            #!/bin/bash -ex
+            curl -sL https://rpm.nodesource.com/setup_14.x | bash -
+            yum install -y nodejs
+            wget -q -T 60 https://github.com/AWSinAction/code3/archive/refs/heads/ch17.zip
+            unzip ch17.zip
+            cd code3-ch17/chapter15/url2png/
+            npm install
+            echo "{\"QueueUrl\": \"${SQSQueue}\", \"Bucket\": \"${ApplicationID}\"}" > config.json
+            node worker.js
   AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
-      LaunchConfigurationName: !Ref LaunchConfiguration
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
       MinSize: 1
       MaxSize: 2
       DesiredCapacity: 1
@@ -272,7 +291,6 @@ Resources:
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       InstanceType: t2.micro
-      KeyName: !Ref KeyName
       IamInstanceProfile: !Ref IamInstanceProfile
       UserData:
         'Fn::Base64': !Sub |
