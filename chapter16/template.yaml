@@ -1,11 +1,10 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AWS in Action: chapter 16'
-Parameters:
-  KeyName:
-    Description: 'Key Pair name'
-    Type: 'AWS::EC2::KeyPair::KeyName'
-    Default: mykey
+Mappings:
+  RegionMap:
+    'us-west-1':
+      AMI: 'ami-0050a5cec636aef16'
 Resources:
   VPC:
     Type: 'AWS::EC2::VPC'
@@ -116,6 +115,50 @@ Resources:
       RedrivePolicy:
         deadLetterTargetArn: !Sub '${SQSDLQueue.Arn}'
         maxReceiveCount: 10
+  LoadBalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Subnets:
+      - Ref: SubnetA
+      - Ref: SubnetB
+      SecurityGroups:
+      - !Ref LoadBalancerSecurityGroup
+      Scheme: 'internet-facing'
+    DependsOn: VPCGatewayAttachment
+  LoadBalancerListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref LoadBalancerTargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+  LoadBalancerTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckIntervalSeconds: 5
+      HealthCheckPath: '/'
+      HealthCheckPort: 80
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 3
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200,302'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+  LoadBalancerSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'awsinaction-elb-sg'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - CidrIp: '0.0.0.0/0'
+        FromPort: 80
+        IpProtocol: tcp
+        ToPort: 80
   WorkerInstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
@@ -140,31 +183,10 @@ Resources:
           Statement:
           - Effect: Allow
             Action:
-            - 'sqs:ChangeMessageVisibility'
             - 'sqs:DeleteMessage'
             - 'sqs:ReceiveMessage'
             Resource: !Sub '${SQSQueue.Arn}'
-      - PolicyName: cloudwatch
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - 'cloudwatch:PutMetricData'
-            Resource: '*'
-      - PolicyName: 's3-elasticbeanstalk'
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - 's3:Get*'
-            - 's3:List*'
-            - 's3:PutObject'
-            Resource:
-            - !Sub 'arn:aws:s3:::elasticbeanstalk-*-${AWS::AccountId}/*'
-            - !Sub 'arn:aws:s3:::elasticbeanstalk-*-${AWS::AccountId}-*/*'
-      - PolicyName: 's3-image'
+      - PolicyName: 's3'
         PolicyDocument:
           Version: '2012-10-17'
           Statement:
@@ -188,7 +210,52 @@ Resources:
     Properties:
       GroupDescription: 'imagery-worker'
       VpcId: !Ref VPC
-  
+  WorkerLaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
+    Properties:
+      LaunchTemplateData:
+        BlockDeviceMappings:
+        - DeviceName: '/dev/xvda'
+          Ebs:
+            Encrypted: true
+            VolumeType: gp3
+        IamInstanceProfile:
+          Name: !Ref WorkerInstanceProfile
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        Monitoring:
+          Enabled: false
+        InstanceType: 't2.micro'
+        MetadataOptions:
+          HttpTokens: required
+        NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          Groups:
+          - !Ref WorkerSecurityGroup
+        UserData:
+          'Fn::Base64': !Sub |
+            #!/bin/bash -ex
+            cd worker/
+            sudo -u ec2-user QueueUrl=${SQSQueue} ImageBucket=${Bucket} node worker.js
+  WorkerAutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref WorkerLaunchTemplate
+        Version: !GetAtt 'WorkerLaunchTemplate.LatestVersionNumber'
+      MinSize: 1
+      MaxSize: 2
+      DesiredCapacity: 1
+      HealthCheckGracePeriod: 120
+      HealthCheckType: EC2
+      VPCZoneIdentifier:
+      - !Ref SubnetA
+      - !Ref SubnetB
+      Tags:
+      - PropagateAtLaunch: true
+        Value: 'imagery-consumer'
+        Key: Name
+    DependsOn: VPCGatewayAttachment
   ServerInstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
@@ -214,26 +281,7 @@ Resources:
           - Effect: Allow
             Action: 'sqs:SendMessage'
             Resource: !Sub '${SQSQueue.Arn}'
-      - PolicyName: cloudwatch
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action: 'cloudwatch:PutMetricData'
-            Resource: '*'
-      - PolicyName: 's3-elasticbeanstalk'
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - 's3:Get*'
-            - 's3:List*'
-            - 's3:PutObject'
-            Resource:
-            - !Sub 'arn:aws:s3:::elasticbeanstalk-*-${AWS::AccountId}/*'
-            - !Sub 'arn:aws:s3:::elasticbeanstalk-*-${AWS::AccountId}-*/*'
-      - PolicyName: 's3-image'
+      - PolicyName: 's3'
         PolicyDocument:
           Version: '2012-10-17'
           Statement:
@@ -255,9 +303,58 @@ Resources:
     Properties:
       GroupDescription: 'imagery-worker'
       VpcId: !Ref VPC
-  
-
+      SecurityGroupIngress:
+      - FromPort: 80
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+        ToPort: 80
+  ServerLaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
+    Properties:
+      LaunchTemplateData:
+        BlockDeviceMappings:
+        - DeviceName: '/dev/xvda'
+          Ebs:
+            Encrypted: true
+            VolumeType: gp3
+        IamInstanceProfile:
+          Name: !Ref ServerInstanceProfile
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        Monitoring:
+          Enabled: false
+        InstanceType: 't2.micro'
+        MetadataOptions:
+          HttpTokens: required
+        NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          Groups:
+          - !Ref ServerSecurityGroup
+        UserData:
+          'Fn::Base64': !Sub |
+            #!/bin/bash -ex
+            cd server/
+            sudo -u ec2-user QueueUrl=${SQSQueue} ImageBucket=${Bucket} node server.js
+  ServerAutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref ServerLaunchTemplate
+        Version: !GetAtt 'ServerLaunchTemplate.LatestVersionNumber'
+      MinSize: 1
+      MaxSize: 2
+      DesiredCapacity: 1
+      HealthCheckGracePeriod: 120
+      HealthCheckType: EC2
+      VPCZoneIdentifier:
+      - !Ref SubnetA
+      - !Ref SubnetB
+      Tags:
+      - PropagateAtLaunch: true
+        Value: 'imagery-consumer'
+        Key: Name
+    DependsOn: VPCGatewayAttachment
 Outputs:
   EndpointURL:
-    Value: !Sub 'http://${EBServerEnvironment.EndpointURL}'
+    Value: !Sub 'http://${LoadBalancer.DNSName}'
     Description: Load Balancer URL
