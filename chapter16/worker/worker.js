@@ -1,4 +1,3 @@
-var express = require('express');
 var bodyParser = require('body-parser');
 var AWS = require('aws-sdk');
 var assert = require('assert-plus');
@@ -13,9 +12,13 @@ var db = new AWS.DynamoDB({
 var s3 = new AWS.S3({
   'region': 'us-east-1'
 });
+var sqs = new AWS.SQS({
+  'region': 'us-east-1'
+});
 
-var app = express();
-app.use(bodyParser.json());
+var states = {
+  'processed': processed
+};
 
 function getImage(id, cb) {
   db.getItem({
@@ -37,30 +40,6 @@ function getImage(id, cb) {
     }
   });
 }
-
-app.get('/', function(request, response) {
-  response.json({});
-});
-
-app.post('/sqs', function(request, response) {
-  assert.string(request.body.imageId, 'imageId');
-  assert.string(request.body.desiredState, 'desiredState');
-  getImage(request.body.imageId, function(err, image) {
-    if (err) {
-      throw err;
-    } else {
-      if (typeof states[request.body.desiredState] === 'function') {
-        states[request.body.desiredState](image, request, response);
-      } else {
-        throw new Error('unsupported desiredState');
-      }
-    }
-  });
-});
-
-var states = {
-  'processed': processed
-};
 
 function processImage(image, cb) {
   var processedS3Key = 'processed/' + image.id + '-' + Date.now() + '.png';
@@ -113,7 +92,7 @@ function processImage(image, cb) {
   });
 }
 
-function processed(image, request, response) {
+function processed(image, cb) {
   processImage(image, function(err, processedS3Key) {
     if (err) {
       throw err;
@@ -151,17 +130,54 @@ function processed(image, request, response) {
         },
         'ReturnValues': 'ALL_NEW',
         'TableName': 'imagery-image'
-      }, function(err, data) {
-        if (err) {
-          throw err;
-        } else {
-          response.json(lib.mapImage(data.Attributes));
-        }
-      });
+      }, cb);
     }
   });
 }
 
-app.listen(process.env.PORT || 8080, function() {
-  console.log('Worker started on port ' + (process.env.PORT || 8080));
-});
+function fetchMessages(cb) {
+  sqs.receiveMessage({
+    QueueUrl: process.env.QueueUrl,
+    MaxNumberOfMessages: 1
+  }, function(err, data) {
+    if (err) {
+      console.log('Could not fetch message from queue', err);
+      cb(err);
+    } else {
+      if (data.Messages && data.Messages.length > 0) {
+        var task = JSON.parse(data.Messages[0].Body);
+        var receiptHandle = data.Messages[0].ReceiptHandle;
+        assert.string(task.imageId, 'imageId');
+        assert.string(task.desiredState, 'desiredState');
+        getImage(task.imageId, function(err, image) {
+          if (err) {
+            console.log('Could not get image', err);
+            cb(err);
+          } else {
+            if (typeof states[task.desiredState] === 'function') {
+              states[task.desiredState](image, function(err, data) {
+                sqs.deleteMesage({
+                  QueueUrl: process.env.QueueUrl,
+                  ReceiptHandle: receiptHandle
+                }, function(err, data) {
+                  if (err) {
+                    console.log('Could not delete message', err);
+                    cb(err);
+                  } else {
+                    setTimeout(function() {
+                      fetchMessages(cb);
+                    }, 10000)
+                  }
+                });
+              });
+            } else {
+              throw new Error('unsupported desiredState');
+            }
+          }
+        });
+      }
+    }
+  });
+}
+
+fetchMessages();
