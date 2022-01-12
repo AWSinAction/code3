@@ -1,7 +1,7 @@
 var express = require('express');
 var bodyParser = require('body-parser');
 var AWS = require('aws-sdk');
-var uuidv4 = require('uuid/v4');
+var { v4: uuidv4 }  = require('uuid');
 var multiparty = require('multiparty');
 
 var lib = require('./lib.js');

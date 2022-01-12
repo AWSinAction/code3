@@ -3,8 +3,42 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AWS in Action: chapter 16'
 Mappings:
   RegionMap:
+    'ap-northeast-1':
+      AMI: 'ami-0821a82442e7b07b7'
+    'ap-northeast-2':
+      AMI: 'ami-05d8ac3eaa138063e'
+    'ap-northeast-3':
+      AMI: 'ami-090a106da3b2a431e'
+    'ap-south-1':
+      AMI: 'ami-0be27e43fa0ca4327'
+    'ap-southeast-1':
+      AMI: 'ami-00ed24e12fb2621c0'
+    'ap-southeast-2':
+      AMI: 'ami-098a7b802c7f82a10'
+    'ca-central-1':
+      AMI: 'ami-0fe90b6891c9efa7d'
+    'eu-central-1':
+      AMI: 'ami-087e8841cf1ef01c1'
+    'eu-north-1':
+      AMI: 'ami-0dffb26b8999b187f'
+    'eu-south-1':
+      AMI: 'ami-046a7d2c19d70d551'
+    'eu-west-1':
+      AMI: 'ami-0b50507320ee0dce9'
+    'eu-west-2':
+      AMI: 'ami-0628fc78c2d649efe'
+    'eu-west-3':
+      AMI: 'ami-00d50d681d3ad9176'
+    'sa-east-1':
+      AMI: 'ami-02d4db2a2f298628a'
+    'us-east-1':
+      AMI: 'ami-0ad3c79dfb359f1ba'
+    'us-east-2':
+      AMI: 'ami-0835623ff6e403fad'
     'us-west-1':
-      AMI: 'ami-0050a5cec636aef16'
+      AMI: 'ami-09011ac37d93264e8'
+    'us-west-2':
+      AMI: 'ami-069a8075ad6b34db8'
 Resources:
   VPC:
     Type: 'AWS::EC2::VPC'
@@ -107,11 +141,11 @@ Resources:
   SQSDLQueue:
     Type: 'AWS::SQS::Queue'
     Properties:
-      QueueName: 'message-dlq'
+      QueueName: 'imagery-dlq'
   SQSQueue:
     Type: 'AWS::SQS::Queue'
     Properties:
-      QueueName: message
+      QueueName: imagery
       RedrivePolicy:
         deadLetterTargetArn: !Sub '${SQSDLQueue.Arn}'
         maxReceiveCount: 10
@@ -139,14 +173,14 @@ Resources:
     Properties:
       HealthCheckIntervalSeconds: 5
       HealthCheckPath: '/'
-      HealthCheckPort: 80
+      HealthCheckPort: 8080
       HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 3
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
       Matcher:
         HttpCode: '200,302'
-      Port: 80
+      Port: 8080
       Protocol: HTTP
       VpcId: !Ref VPC
   LoadBalancerSecurityGroup:
@@ -205,6 +239,16 @@ Resources:
             - 'dynamodb:GetItem'
             - 'dynamodb:UpdateItem'
             Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Table}'
+      - PolicyName: ssm
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            Resource: '*'
   WorkerSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -234,9 +278,12 @@ Resources:
           - !Ref WorkerSecurityGroup
         UserData:
           'Fn::Base64': !Sub |
-            #!/bin/bash -ex
-            cd worker/
-            sudo -u ec2-user QueueUrl=${SQSQueue} ImageBucket=${Bucket} node worker.js
+            #!/bin/bash -x
+            bash -ex << "TRY"
+              cd /home/ec2-user/worker/
+              sudo -u ec2-user ImageQueue=${SQSQueue} ImageBucket=${Bucket} nohup node worker.js > worker.log &
+            TRY
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WorkerAutoScalingGroup --region ${AWS::Region}
   WorkerAutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
@@ -253,9 +300,16 @@ Resources:
       - !Ref SubnetB
       Tags:
       - PropagateAtLaunch: true
-        Value: 'imagery-consumer'
+        Value: 'imagery-worker'
         Key: Name
     DependsOn: VPCGatewayAttachment
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT10M
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        PauseTime: PT10M
+        WaitOnResourceSignals: true
   ServerInstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
@@ -298,16 +352,26 @@ Resources:
             - 'dynamodb:PutItem'
             - 'dynamodb:UpdateItem'
             Resource: !Sub  'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Table}'
+      - PolicyName: ssm
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            Resource: '*'
   ServerSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: 'imagery-worker'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-      - FromPort: 80
+      - FromPort: 8080
         IpProtocol: tcp
         SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
-        ToPort: 80
+        ToPort: 8080
   ServerLaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
@@ -332,9 +396,12 @@ Resources:
           - !Ref ServerSecurityGroup
         UserData:
           'Fn::Base64': !Sub |
-            #!/bin/bash -ex
-            cd server/
-            sudo -u ec2-user QueueUrl=${SQSQueue} ImageBucket=${Bucket} node server.js
+            #!/bin/bash -x
+            bash -ex << "TRY"
+              cd /home/ec2-user/server/
+              sudo -u ec2-user ImageQueue=${SQSQueue} ImageBucket=${Bucket} nohup node server.js > server.log &
+            TRY
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ServerAutoScalingGroup --region ${AWS::Region}
   ServerAutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
@@ -344,16 +411,25 @@ Resources:
       MinSize: 1
       MaxSize: 2
       DesiredCapacity: 1
+      TargetGroupARNs:
+      - !Ref LoadBalancerTargetGroup
       HealthCheckGracePeriod: 120
-      HealthCheckType: EC2
+      HealthCheckType: ELB
       VPCZoneIdentifier:
       - !Ref SubnetA
       - !Ref SubnetB
       Tags:
       - PropagateAtLaunch: true
-        Value: 'imagery-consumer'
+        Value: 'imagery-server'
         Key: Name
     DependsOn: VPCGatewayAttachment
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT10M
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        PauseTime: PT10M
+        WaitOnResourceSignals: true
 Outputs:
   EndpointURL:
     Value: !Sub 'http://${LoadBalancer.DNSName}'
