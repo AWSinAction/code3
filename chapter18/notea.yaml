@@ -153,18 +153,6 @@ Resources:
       TargetGroupAttributes:
       - Key: deregistration_delay.timeout_seconds
         Value: 30
-  LoadBalancerHttpListenerRule:
-    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
-    Properties:
-      Actions:
-      - Type: forward
-        TargetGroupArn: !Ref TargetGroup
-      Conditions:
-      - Field: path-pattern
-        Values:
-        - '*'
-      ListenerArn: !Ref HttpListener
-      Priority: 1
   ServiceRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -224,6 +212,10 @@ Resources:
             - 's3:PutObject'
             - 's3:DeleteObject'
             Resource: !Sub '${Bucket.Arn}/*'
+          - Effect: Allow
+            Action:
+            - 's3:ListBucket'
+            Resource: !Sub '${Bucket.Arn}'
   TaskDefinition:
     Type: 'AWS::ECS::TaskDefinition'
     Properties:
@@ -261,7 +253,6 @@ Resources:
     Properties:
       RetentionInDays: 7
   Service:
-    DependsOn: LoadBalancerHttpListenerRule
     Type: 'AWS::ECS::Service'
     Properties:
       Cluster: !Ref Cluster
