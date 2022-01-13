@@ -45,7 +45,7 @@ async function processImage(image) {
   }).promise();
   await fs.writeFile(rawFile, data.Body, {'encoding': null});
   let lenna = await Jimp.read(rawFile);
-  await lenna.sepia().write(processedFile)
+  await lenna.sepia().write(processedFile);
   await fs.unlink(rawFile);
   let buf = await fs.readFile(processedFile, {'encoding': null});
   await s3.putObject({
