@@ -434,13 +434,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: awsinaction-sg
-      VpcId:
-        Ref: VPC
-      SecurityGroupIngress:
-      - CidrIp: 0.0.0.0/0
-        FromPort: 22
-        IpProtocol: tcp
-        ToPort: 22
+      VpcId: !Ref VPC
   LoadTestInstance:
     Type: 'AWS::EC2::Instance'
     DependsOn:

@@ -207,8 +207,9 @@ Resources:
             curl -sL https://rpm.nodesource.com/setup_14.x | bash -
             amazon-linux-extras install epel -y
             yum clean metadata
-            yum install -y nodejs libfonts chromium
-            wget -q -T 60 https://github.com/AWSinAction/code3/archive/refs/heads/ch17.zip
+            yum --enablerepo=nodesource install -y nodejs
+            yum install -y libfonts chromium
+            wget -q -T 60 https://github.com/AWSinAction/code3/archive/refs/heads/main.zip
             unzip ch17.zip
             cd code3-ch17/chapter15/url2png/
             npm install
