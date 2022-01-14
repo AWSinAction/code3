@@ -2,10 +2,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AWS in Action: chapter 17 (Wordpress)'
 Parameters:
-  KeyName:
-    Description: 'Key Pair name'
-    Type: 'AWS::EC2::KeyPair::KeyName'
-    Default: mykey
   WordpressAdminPassword:
     Description: 'The password for the Wordpress administrator.'
     Type: String
@@ -13,36 +9,40 @@ Parameters:
     ConstraintDescription: 'WordpressAdminPassword must match [A-Za-z0-9]{8,30}'
 Mappings:
   RegionMap:
+    'eu-north-1':
+      AMI: 'ami-05bc2576a72f22c39'
     'ap-south-1':
-      AMI: 'ami-2ed19c41'
+      AMI: 'ami-0002bdad91f793433'
     'eu-west-3':
-      AMI: 'ami-c8a017b5'
+      AMI: 'ami-0c73cd1c5347436f3'
     'eu-west-2':
-      AMI: 'ami-e3051987'
+      AMI: 'ami-029ed17b4ea379178'
     'eu-west-1':
-      AMI: 'ami-760aaa0f'
+      AMI: 'ami-04632f3cef5083854'
+    'ap-northeast-3':
+      AMI: 'ami-0ae88850834d2c589'
     'ap-northeast-2':
-      AMI: 'ami-fc862292'
+      AMI: 'ami-0263588f2531a56bd'
     'ap-northeast-1':
-      AMI: 'ami-2803ac4e'
+      AMI: 'ami-0abaa5b0faf689830'
     'sa-east-1':
-      AMI: 'ami-1678037a'
+      AMI: 'ami-053a035b046dbb704'
     'ca-central-1':
-      AMI: 'ami-ef3b838b'
+      AMI: 'ami-0173297cea9ba27b0'
     'ap-southeast-1':
-      AMI: 'ami-dd7935be'
+      AMI: 'ami-0d1d4b8d5a0cd293f'
     'ap-southeast-2':
-      AMI: 'ami-1a668878'
+      AMI: 'ami-0f4484f62c4fd8767'
     'eu-central-1':
-      AMI: 'ami-e28d098d'
+      AMI: 'ami-099ccc441b2ef41ec'
     'us-east-1':
-      AMI: 'ami-6057e21a'
+      AMI: 'ami-061ac2e015473fbe2'
     'us-east-2':
-      AMI: 'ami-aa1b34cf'
+      AMI: 'ami-056b1936002ca8ede'
     'us-west-1':
-      AMI: 'ami-1a033c7a'
+      AMI: 'ami-028f2b5ee08012131'
     'us-west-2':
-      AMI: 'ami-32d8124a'
+      AMI: 'ami-0e21d4d9303512b8e'
 Resources:
   VPC:
     Type: 'AWS::EC2::VPC'
@@ -172,25 +172,10 @@ Resources:
       GroupDescription: 'awsinaction-sg'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-      - CidrIp: '0.0.0.0/0'
-        FromPort: 22
-        IpProtocol: tcp
-        ToPort: 22
       - FromPort: 80
         IpProtocol: tcp
         SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
         ToPort: 80
-  LoadTestSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: awsinaction-sg
-      VpcId:
-        Ref: VPC
-      SecurityGroupIngress:
-      - CidrIp: 0.0.0.0/0
-        FromPort: 22
-        IpProtocol: tcp
-        ToPort: 22
   DatabaseSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -253,53 +238,122 @@ Resources:
         FromPort: 2049
         ToPort: 2049
         SourceSecurityGroupId: !Ref WebServerSecurityGroup
-  LaunchConfiguration:
-    Type: 'AWS::AutoScaling::LaunchConfiguration'
+  InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+      - !Ref InstanceRole
+  InstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: ssm
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            Resource: '*'
+  LaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
     Metadata:
       'AWS::CloudFormation::Init':
         configSets:
-          default: [config]
+          default: [mount, extras, config]
+        mount:
+          packages:
+            yum:
+              'amazon-efs-utils': []
+          commands:
+            'a_mount':
+              command: !Sub 'mkdir /var/www && echo "${EFSFileSystem}:/ /var/www efs tls,_netdev 0 0" >> /etc/fstab && while ! (echo > /dev/tcp/${EFSFileSystem}.efs.${AWS::Region}.amazonaws.com/2049) >/dev/null 2>&1; do sleep 5; done && mount -a -t efs'
+              test: '[ ! -d /var/www ]'
+        extras:
+          commands:
+            'a_enable_php':
+              command: 'amazon-linux-extras enable php7.4 && yum -y clean metadata'
+              test: "! grep -Fxq '[amzn2extra-php7.4]' /etc/yum.repos.d/amzn2-extras.repo"
         config:
           packages:
             yum:
-              php70: []
-              php70-opcache: []
-              php70-mysqlnd: []
-              mysql56: []
-              httpd24: []
+              php: []
+              php-gd: []
+              php-opcache: []
+              php-mysqlnd: []
+              php-mbstring: []
+              php-xmlrpc: []
+              mariadb: []
+              httpd: []
           files:
+            '/root/php.sh':
+              content: |
+                #!/bin/bash -ex
+                sed -i 's/max_execution_time = 30/max_execution_time = 300/' /etc/php.ini
+                sed -i 's/max_input_time = 60/max_input_time = 300/' /etc/php.ini
+                sed -i 's/; max_input_vars = 1000/max_input_vars = 10000/' /etc/php.ini
+                sed -i 's/memory_limit = 128M/memory_limit = 512M/' /etc/php.ini
+                sed -i 's/post_max_size = 8M/post_max_size = 200M/' /etc/php.ini
+                sed -i 's/upload_max_filesize = 2M/upload_max_filesize = 200M/' /etc/php.ini
+                sed -i 's/max_file_uploads = 20/max_file_uploads = 200/' /etc/php.ini
+
+                sed -i 's/opcache.memory_consumption=128/opcache.memory_consumption=256/g' /etc/php.d/10-opcache.ini
+                sed -i 's/opcache.interned_strings_buffer=8/opcache.interned_strings_buffer=16/g' /etc/php.d/10-opcache.ini
+                sed -i 's/opcache.max_accelerated_files=4000/opcache.max_accelerated_files=10000/g' /etc/php.d/10-opcache.ini
+                sed -i 's/;opcache.max_wasted_percentage=5/opcache.max_wasted_percentage=10/g' /etc/php.d/10-opcache.ini
+                sed -i 's/;opcache.validate_timestamps=1/opcache.validate_timestamps=1/g' /etc/php.d/10-opcache.ini
+                sed -i 's/;opcache.revalidate_freq=2/opcache.revalidate_freq=60/g' /etc/php.d/10-opcache.ini
+                sed -i 's/;opcache.fast_shutdown=0/opcache.fast_shutdown=0/g' /etc/php.d/10-opcache.ini
+              mode: '000500'
+              owner: root
+              group: root
             '/etc/httpd/conf.d/wordpress.conf':
-              content: !Sub |
+              content: |
                 <Directory "/var/www/html">
                 Options Indexes FollowSymLinks
                 AllowOverride All
                 Require all granted
                 </Directory>
-              mode: 000500
+              mode: '000500'
               owner: root
               group: root
             '/root/wordpress.sh':
-              content: !Sub |
-                #!/bin/bash -ex
-                sed -i 's/;opcache.revalidate_freq=2/opcache.revalidate_freq=300/g' /etc/php-7.0.d/10-opcache.ini
-                # ensure than only one machine installs wp
-                if mkdir /var/www/lock; then
-                  cd /var/www/html
-                  wget -q -T 60 https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
-                  if ! php wp-cli.phar core is-installed --allow-root; then
-                    php wp-cli.phar core download --allow-root --version=4.8
-                    php wp-cli.phar core config --dbname='wordpress' --dbuser='wordpress' --dbpass='wordpress' --dbhost='${Database.Endpoint.Address}' --allow-root
-                    php wp-cli.phar core install --url='http://${LoadBalancer.DNSName}' --title='AWS in Action' --admin_user='admin' --admin_password='${WordpressAdminPassword}' --admin_email='test@example.com' --skip-email --allow-root
+              content: !Sub
+              - |
+                  #!/bin/bash -ex
+                  # ensure than only one machine installs wp
+                  if mkdir /var/www/lock; then
+                    cd /var/www/html
+                    wget --quiet --timeout=60 --output-document=wp-cli.phar https://github.com/wp-cli/wp-cli/releases/download/v2.5.0/wp-cli-2.5.0.phar
+                    if ! php wp-cli.phar core is-installed --allow-root; then
+                      php wp-cli.phar core download --allow-root --version=5.8.2
+                      php wp-cli.phar core config --dbname='wordpress' --dbuser='wordpress' --dbpass='wordpress' --dbhost='${DBHost}' --allow-root
+                      php wp-cli.phar core install --url='http://${DomainName}' --title='AWS in Action' --admin_user='admin' --admin_password='${WordpressAdminPassword}' --admin_email='test@example.com' --skip-email --allow-root
+                    fi
+                    chown -R apache:apache /var/www/html
+                    chmod u+wrx /var/www/html/wp-content/*
+                    rm -f wp-cli.phar
                   fi
-                  chown -R apache:apache /var/www/html
-                  chmod u+wrx /var/www/html/wp-content/*
-                  rm wp-cli.phar
-                fi
-              mode: 000500
+              - WordpressAdminPassword: !Ref WordpressAdminPassword
+                DBHost: !GetAtt 'Database.Endpoint.Address'
+                DomainName: !GetAtt 'LoadBalancer.DNSName'
+              mode: '000500'
               owner: root
               group: root
           commands:
-            01_wordpress:
+            01_php:
+              command: '/root/php.sh'
+              cwd: '/var/www/html'
+            02_wordpress:
               command: '/root/wordpress.sh'
               cwd: '/var/www/html'
           services:
@@ -307,24 +361,35 @@ Resources:
               httpd:
                 enabled: true
                 ensureRunning: true
+              amazon-ssm-agent:
+                enabled: true
+                ensureRunning: true
     Properties:
-      AssociatePublicIpAddress: true
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceMonitoring: false
-      InstanceType: 't2.micro'
-      SecurityGroups:
-      - !Ref WebServerSecurityGroup
-      KeyName: !Ref KeyName
-      UserData:
-        'Fn::Base64': !Sub |
-          #!/bin/bash -x
-          bash -ex << "TRY"
-            while ! nc -z ${EFSFileSystem}.efs.${AWS::Region}.amazonaws.com 2049; do sleep 1; done
-            mkdir /var/www
-            mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 "${EFSFileSystem}.efs.${AWS::Region}.amazonaws.com:/" /var/www/
-            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchConfiguration --region ${AWS::Region}
-          TRY
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
+      LaunchTemplateData:
+        BlockDeviceMappings:
+        - DeviceName: '/dev/xvda'
+          Ebs:
+            Encrypted: true
+            VolumeType: gp3
+        IamInstanceProfile:
+          Name: !Ref InstanceProfile
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        Monitoring:
+          Enabled: false
+        InstanceType: 't2.micro'
+        MetadataOptions:
+          HttpTokens: required
+        NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          Groups:
+          - !Ref WebServerSecurityGroup
+        UserData:
+          'Fn::Base64': !Sub |
+            #!/bin/bash -ex
+            trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}' ERR
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchTemplate --region ${AWS::Region}
+            /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
   AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     DependsOn:
@@ -333,7 +398,9 @@ Resources:
     Properties:
       TargetGroupARNs:
       - !Ref LoadBalancerTargetGroup
-      LaunchConfigurationName: !Ref LaunchConfiguration
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
       MinSize: 2
       MaxSize: 4
       DesiredCapacity: 2
@@ -363,6 +430,11 @@ Resources:
           PredefinedMetricType: ASGAverageCPUUtilization
         TargetValue: 70
       EstimatedInstanceWarmup: 60
+  LoadTestSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: awsinaction-sg
+      VpcId: !Ref VPC
   LoadTestInstance:
     Type: 'AWS::EC2::Instance'
     DependsOn:
@@ -371,12 +443,12 @@ Resources:
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       InstanceType: 't2.micro'
-      KeyName: !Ref KeyName
       UserData:
         'Fn::Base64': !Sub |
           #!/bin/bash -ex
-          yum install -y httpd24-tools
+          yum install -y httpd-tools
           ab -n 500000 -c 15 -t 600 -s 120 -r http://${LoadBalancer.DNSName}/
+      IamInstanceProfile: !Ref InstanceProfile
       Tags:
       - Key: Name
         Value: 'wordpress-loadtest'

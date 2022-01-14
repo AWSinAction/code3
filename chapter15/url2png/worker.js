@@ -1,6 +1,6 @@
 const fs = require('fs');
 const AWS = require('aws-sdk');
-const webshot = require('node-webshot');
+const puppeteer = require('puppeteer');
 const config = require('./config.json');
 const sqs = new AWS.SQS({
   region: 'us-east-1'
@@ -9,92 +9,58 @@ const s3 = new AWS.S3({
   region: 'us-east-1'
 });
 
-const acknowledge = (message, cb) => {
-  const params = {
+async function acknowledge(message) {
+  await sqs.deleteMessage({
     QueueUrl: config.QueueUrl,
     ReceiptHandle: message.ReceiptHandle
-  };
-  sqs.deleteMessage(params, cb);
+  }).promise();
 };
 
-const process = (message, cb) => {
+async function process(message) {
   const body = JSON.parse(message.Body);
-  const file = body.id + '.png';
-  webshot(body.url, file, (err) => {
-    if (err) {
-      cb(err);
-    } else {
-      fs.readFile(file, (err, buf) => {
-        if (err) {
-          cb(err);
-        } else {
-          const params = {
-            Bucket: config.Bucket,
-            Key: file,
-            ACL: 'public-read',
-            ContentType: 'image/png',
-            Body: buf
-          };
-          s3.putObject(params, (err) => {
-            if (err) {
-              cb(err);
-            } else {
-              fs.unlink(file, cb);
-            }
-          });
-        }
-      });
-    }
-  });
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+
+  await page.goto(body.url);
+  page.setViewport({ width: 1024, height: 768})
+  const screenshot = await page.screenshot();
+  
+  await s3.upload({
+    Bucket: config.Bucket,
+    Key: `${body.id}.png`,
+    Body: screenshot,
+    ContentType: 'image/png',
+    ACL: 'public-read',
+  }).promise();
+
+  await browser.close();
 };
 
-const receive = (cb) => {
-  const params = {
+async function receive() {
+  const result = await sqs.receiveMessage({
     QueueUrl: config.QueueUrl,
     MaxNumberOfMessages: 1,
     VisibilityTimeout: 120,
     WaitTimeSeconds: 10
-  };
-  sqs.receiveMessage(params, (err, data) => {
-    if (err) {
-      cb(err);
-    } else {
-      if (data.Messages === undefined) {
-        cb(null, null);
-      } else {
-        cb(null, data.Messages[0]);
-      }
-    }
-  });
+  }).promise();
+
+  if (result.Messages) {
+    return result.Messages[0]
+  } else {
+    return null;
+  }
 };
 
-const run = () => {
-  receive((err, message) => {
-    if (err) {
-      throw err;
-    } else {
-      if (message === null) {
-        console.log('nothing to do');
-        setTimeout(run, 1000);
-      } else {
-        console.log('process');
-        process(message, (err) => {
-          if (err) {
-            throw err;
-          } else {
-            acknowledge(message, (err) => {
-              if (err) {
-                throw err;
-              } else {
-                console.log('done');
-                setTimeout(run, 1000);
-              }
-            });
-          }
-        });
-      }
+async function run() {
+  while(true) {
+    const message = await receive();
+    console.log('Processing message', message);
+    if (message) {
+      await process(message);
+      await acknowledge(message);
     }
-  });
+    await new Promise(r => setTimeout(r, 1000));
+  }
 };
 
 run();
