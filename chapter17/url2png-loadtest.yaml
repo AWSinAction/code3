@@ -173,8 +173,6 @@ Resources:
     Type: 'AWS::S3::Bucket'
     Properties:
       BucketName: !Ref ApplicationID
-      WebsiteConfiguration:
-        IndexDocument: 'index.html'
   SQSQueue:
     Type: 'AWS::SQS::Queue'
     Properties:

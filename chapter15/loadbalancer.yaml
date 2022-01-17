@@ -2,10 +2,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AWS in Action: chapter 15 (Load Balancer)'
 Parameters:
-  KeyName:
-    Description: 'Key Pair name'
-    Type: 'AWS::EC2::KeyPair::KeyName'
-    Default: mykey
   NumberOfVirtualMachines:
     Description: 'Number of virtual machines'
     Type: Number
@@ -14,36 +10,42 @@ Parameters:
     MaxValue: 4
 Mappings:
   RegionMap:
-    'ap-south-1':
-      AMI: 'ami-2ed19c41'
-    'eu-west-3':
-      AMI: 'ami-c8a017b5'
-    'eu-west-2':
-      AMI: 'ami-e3051987'
-    'eu-west-1':
-      AMI: 'ami-760aaa0f'
-    'ap-northeast-2':
-      AMI: 'ami-fc862292'
     'ap-northeast-1':
-      AMI: 'ami-2803ac4e'
-    'sa-east-1':
-      AMI: 'ami-1678037a'
-    'ca-central-1':
-      AMI: 'ami-ef3b838b'
+      AMI: 'ami-0821a82442e7b07b7'
+    'ap-northeast-2':
+      AMI: 'ami-05d8ac3eaa138063e'
+    'ap-northeast-3':
+      AMI: 'ami-090a106da3b2a431e'
+    'ap-south-1':
+      AMI: 'ami-0be27e43fa0ca4327'
     'ap-southeast-1':
-      AMI: 'ami-dd7935be'
+      AMI: 'ami-00ed24e12fb2621c0'
     'ap-southeast-2':
-      AMI: 'ami-1a668878'
+      AMI: 'ami-098a7b802c7f82a10'
+    'ca-central-1':
+      AMI: 'ami-0fe90b6891c9efa7d'
     'eu-central-1':
-      AMI: 'ami-e28d098d'
+      AMI: 'ami-087e8841cf1ef01c1'
+    'eu-north-1':
+      AMI: 'ami-0dffb26b8999b187f'
+    'eu-south-1':
+      AMI: 'ami-046a7d2c19d70d551'
+    'eu-west-1':
+      AMI: 'ami-0b50507320ee0dce9'
+    'eu-west-2':
+      AMI: 'ami-0628fc78c2d649efe'
+    'eu-west-3':
+      AMI: 'ami-00d50d681d3ad9176'
+    'sa-east-1':
+      AMI: 'ami-02d4db2a2f298628a'
     'us-east-1':
-      AMI: 'ami-6057e21a'
+      AMI: 'ami-0ad3c79dfb359f1ba'
     'us-east-2':
-      AMI: 'ami-aa1b34cf'
+      AMI: 'ami-0835623ff6e403fad'
     'us-west-1':
-      AMI: 'ami-1a033c7a'
+      AMI: 'ami-09011ac37d93264e8'
     'us-west-2':
-      AMI: 'ami-32d8124a'
+      AMI: 'ami-069a8075ad6b34db8'
 Resources:
   VPC:
     Type: 'AWS::EC2::VPC'
@@ -173,16 +175,38 @@ Resources:
       GroupDescription: 'awsinaction-sg'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-      - CidrIp: '0.0.0.0/0'
-        FromPort: 22
-        IpProtocol: tcp
-        ToPort: 22
       - SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
         FromPort: 80
         IpProtocol: tcp
         ToPort: 80
-  LaunchConfiguration:
-    Type: 'AWS::AutoScaling::LaunchConfiguration'
+  InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+      - !Ref InstanceRole
+  InstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: ssm
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            Resource: '*'
+  LaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
     Metadata:
       'AWS::CloudFormation::Init':
         config:
@@ -208,22 +232,29 @@ Resources:
                 enabled: true
                 ensureRunning: true
     Properties:
-      AssociatePublicIpAddress: true
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceMonitoring: false
-      InstanceType: 't2.micro'
-      SecurityGroups:
-      - !Ref WebServerSecurityGroup
-      KeyName: !Ref KeyName
-      UserData:
-        'Fn::Base64': !Sub |
-          #!/bin/bash -x
-          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchConfiguration --region ${AWS::Region}
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Name: !Ref InstanceProfile
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        Monitoring:
+          Enabled: false
+        InstanceType: 't2.micro'
+        NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          Groups:
+          - !Ref WebServerSecurityGroup
+        UserData:
+          'Fn::Base64': !Sub |
+            #!/bin/bash -x
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchTemplate --region ${AWS::Region}
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
   AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
-      LaunchConfigurationName: !Ref LaunchConfiguration
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
       MinSize: !Ref NumberOfVirtualMachines
       MaxSize: !Ref NumberOfVirtualMachines
       DesiredCapacity: !Ref NumberOfVirtualMachines
