@@ -1,20 +1,14 @@
 var express = require('express');
 var bodyParser = require('body-parser');
 var AWS = require('aws-sdk');
-var uuidv4 = require('uuid/v4');
+var { v4: uuidv4 }  = require('uuid');
 var multiparty = require('multiparty');
 
 var lib = require('./lib.js');
 
-var db = new AWS.DynamoDB({
-  'region': 'us-east-1'
-});
-var sqs = new AWS.SQS({
-  'region': 'us-east-1'
-});
-var s3 = new AWS.S3({
-  'region': 'us-east-1'
-});
+var db = new AWS.DynamoDB({});
+var sqs = new AWS.SQS({});
+var s3 = new AWS.S3({});
 
 var app = express();
 app.use(bodyParser.json());
