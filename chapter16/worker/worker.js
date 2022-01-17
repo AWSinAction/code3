@@ -5,15 +5,9 @@ const fs = require('fs/promises');
 
 const lib = require('./lib.js');
 
-const db = new AWS.DynamoDB({
-  'region': 'us-east-1'
-});
-const s3 = new AWS.S3({
-  'region': 'us-east-1'
-});
-const sqs = new AWS.SQS({
-  'region': 'us-east-1'
-});
+const db = new AWS.DynamoDB({});
+const s3 = new AWS.S3({});
+const sqs = new AWS.SQS({});
 
 const states = {
   'processed': processed
@@ -97,7 +91,7 @@ async function processed(image) {
   }).promise();
 }
 
-async function processMessages() {
+async function processMessage() {
   let data = await sqs.receiveMessage({
     QueueUrl: process.env.ImageQueue,
     MaxNumberOfMessages: 1
@@ -123,8 +117,8 @@ async function processMessages() {
 async function run() {
   while (true) {
     try {
-    await processMessages();
-    await new Promise(resolve => setTimeout(resolve, 10000));
+    await processMessage();
+    await new Promise(resolve => setTimeout(resolve, 1000));
     } catch (e) {
       console.log('ERROR', e);
     }

@@ -271,12 +271,11 @@ Resources:
           - !Ref WorkerSecurityGroup
         UserData:
           'Fn::Base64': !Sub |
-            #!/bin/bash -x
-            bash -ex << "TRY"
-              cd /home/ec2-user/worker/
-              sudo -u ec2-user ImageQueue=${SQSQueue} ImageBucket=${Bucket} nohup node worker.js > worker.log &
-            TRY
-            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WorkerAutoScalingGroup --region ${AWS::Region}
+            #!/bin/bash -ex
+            trap '/opt/aws/bin/cfn-signal -e 1 --region ${AWS::Region} --stack ${AWS::StackName} --resource WorkerAutoScalingGroup' ERR
+            cd /home/ec2-user/worker/
+            sudo -u ec2-user ImageQueue=${SQSQueue} ImageBucket=${Bucket} nohup node worker.js > worker.log &
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WorkerAutoScalingGroup --region ${AWS::Region}            
   WorkerAutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
@@ -382,12 +381,11 @@ Resources:
           - !Ref ServerSecurityGroup
         UserData:
           'Fn::Base64': !Sub |
-            #!/bin/bash -x
-            bash -ex << "TRY"
-              cd /home/ec2-user/server/
-              sudo -u ec2-user ImageQueue=${SQSQueue} ImageBucket=${Bucket} nohup node server.js > server.log &
-            TRY
-            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ServerAutoScalingGroup --region ${AWS::Region}
+            #!/bin/bash -ex
+            trap '/opt/aws/bin/cfn-signal -e 1 --region ${AWS::Region} --stack ${AWS::StackName} --resource ServerAutoScalingGroup' ERR
+            cd /home/ec2-user/server/
+            sudo -u ec2-user ImageQueue=${SQSQueue} ImageBucket=${Bucket} nohup node server.js > server.log &
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ServerAutoScalingGroup --region ${AWS::Region}            
   ServerAutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
