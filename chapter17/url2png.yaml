@@ -1,12 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AWS in Action: chapter 17 (URL2PNG)'
-Parameters:
-  ApplicationID:
-    Description: 'A unique identifier for your application.'
-    Type: String
-    AllowedPattern: '[A-Za-z0-9\\-]+'
-    ConstraintDescription: 'Only letters, digits or dash allowed.'
 Mappings:
   RegionMap:
     'eu-north-1':
@@ -150,7 +144,7 @@ Resources:
           Statement:
           - Effect: Allow
             Action: 's3:*'
-            Resource: !Sub 'arn:aws:s3:::${ApplicationID}/*'
+            Resource: !Sub 'arn:aws:s3:::ch17-url2png-${AWS::AccountId}/*'
           - Effect: Allow
             Action: 'sqs:*'
             Resource: !Sub 'arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${SQSQueue.QueueName}'
@@ -172,9 +166,13 @@ Resources:
   S3Bucket:
     Type: 'AWS::S3::Bucket'
     Properties:
+<<<<<<< Updated upstream
       BucketName: !Ref ApplicationID
       WebsiteConfiguration:
         IndexDocument: 'index.html'
+=======
+      BucketName: !Sub 'ch17-url2png-${AWS::AccountId}'
+>>>>>>> Stashed changes
   SQSQueue:
     Type: 'AWS::SQS::Queue'
     Properties:
@@ -213,7 +211,7 @@ Resources:
             unzip ch17.zip
             cd code3-ch17/chapter15/url2png/
             npm install
-            echo "{\"QueueUrl\": \"${SQSQueue}\", \"Bucket\": \"${ApplicationID}\"}" > config.json
+            echo "{\"QueueUrl\": \"${SQSQueue}\", \"Bucket\": \"ch17-url2png-${AWS::AccountId}\"}" > config.json
             sudo -u ec2-user node worker.js
   AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
@@ -223,7 +221,6 @@ Resources:
         Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
       MinSize: 1
       MaxSize: 2
-      DesiredCapacity: 1
       HealthCheckGracePeriod: 120
       HealthCheckType: EC2
       VPCZoneIdentifier:
@@ -288,3 +285,7 @@ Resources:
         Value: !Sub '${SQSQueue.QueueName}'
       ComparisonOperator: LessThanThreshold
       MetricName: ApproximateNumberOfMessagesVisible
+Outputs:
+  BucketName:
+    Value: !Ref S3Bucket
+    Description: 'The name of the S3 bucket'
