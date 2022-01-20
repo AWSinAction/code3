@@ -2,12 +2,8 @@ const fs = require('fs');
 const AWS = require('aws-sdk');
 const puppeteer = require('puppeteer');
 const config = require('./config.json');
-const sqs = new AWS.SQS({
-  region: 'us-east-1'
-});
-const s3 = new AWS.S3({
-  region: 'us-east-1'
-});
+const sqs = new AWS.SQS();
+const s3 = new AWS.S3();
 
 async function acknowledge(message) {
   await sqs.deleteMessage({
@@ -54,8 +50,8 @@ async function receive() {
 async function run() {
   while(true) {
     const message = await receive();
-    console.log('Processing message', message);
     if (message) {
+      console.log('Processing message', message);
       await process(message);
       await acknowledge(message);
     }

@@ -166,13 +166,7 @@ Resources:
   S3Bucket:
     Type: 'AWS::S3::Bucket'
     Properties:
-<<<<<<< Updated upstream
-      BucketName: !Ref ApplicationID
-      WebsiteConfiguration:
-        IndexDocument: 'index.html'
-=======
       BucketName: !Sub 'ch17-url2png-${AWS::AccountId}'
->>>>>>> Stashed changes
   SQSQueue:
     Type: 'AWS::SQS::Queue'
     Properties:
