@@ -275,7 +275,7 @@ Resources:
             trap '/opt/aws/bin/cfn-signal -e 1 --region ${AWS::Region} --stack ${AWS::StackName} --resource WorkerAutoScalingGroup' ERR
             cd /home/ec2-user/worker/
             sudo -u ec2-user ImageQueue=${SQSQueue} ImageBucket=${Bucket} nohup node worker.js > worker.log &
-            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WorkerAutoScalingGroup --region ${AWS::Region}            
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WorkerAutoScalingGroup --region ${AWS::Region}
   WorkerAutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:

@@ -1,16 +1,15 @@
-var express = require('express');
-var bodyParser = require('body-parser');
-var AWS = require('aws-sdk');
-var { v4: uuidv4 }  = require('uuid');
-var multiparty = require('multiparty');
+const express = require('express');
+const bodyParser = require('body-parser');
+const AWS = require('aws-sdk');
+const { v4: uuidv4 }  = require('uuid');
+const multiparty = require('multiparty');
 
-var lib = require('./lib.js');
+const lib = require('./lib.js');
+constdb = new AWS.DynamoDB({});
+const sqs = new AWS.SQS({});
+const s3 = new AWS.S3({});
 
-var db = new AWS.DynamoDB({});
-var sqs = new AWS.SQS({});
-var s3 = new AWS.S3({});
-
-var app = express();
+const app = express();
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
@@ -36,7 +35,7 @@ function getImage(id, cb) {
 }
 
 function uploadImage(image, part, response) {
-  var rawS3Key = 'upload/' + image.id + '-' + Date.now();
+  const rawS3Key = 'upload/' + image.id + '-' + Date.now();
   s3.putObject({
     'Bucket': process.env.ImageBucket,
     'Key': rawS3Key,
@@ -101,7 +100,7 @@ function uploadImage(image, part, response) {
 }
 
 app.post('/image', function(request, response) {
-  var id = uuidv4();
+  const id = uuidv4();
   db.putItem({
     'Item': {
       'id': {
@@ -143,7 +142,7 @@ app.post('/image/:id/upload', function(request, response) {
     if (err) {
       throw err;
     } else {
-      var form = new multiparty.Form();
+      const form = new multiparty.Form();
       form.on('part', function(part) {
         uploadImage(image, part, response);
       });
