@@ -1,4 +1,4 @@
 {
-  "QueueUrl": "https://sqs.us-east-1.amazonaws.com/486555357186/url2png",
-  "Bucket": "url2png-andreas"
+  "QueueUrl": "https://queue.amazonaws.com/123456789/url2png",
+  "Bucket": "url2png-$yourname"
 }
