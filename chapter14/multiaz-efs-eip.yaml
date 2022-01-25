@@ -2,10 +2,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AWS in Action: chapter 14 (Jenkins running in Auto Scaling Group over multiple AZs, with EFS, with EIP)'
 Parameters:
-  KeyName:
-    Description: 'Key Pair name'
-    Type: 'AWS::EC2::KeyPair::KeyName'
-    Default: mykey
   JenkinsAdminPassword:
     Description: 'Password for Jenkins admin user'
     Type: String
@@ -14,36 +10,40 @@ Parameters:
     MaxLength: 42
 Mappings:
   RegionMap:
+    'eu-north-1':
+      AMI: 'ami-05bc2576a72f22c39'
     'ap-south-1':
-      AMI: 'ami-2ed19c41'
+      AMI: 'ami-0002bdad91f793433'
     'eu-west-3':
-      AMI: 'ami-c8a017b5'
+      AMI: 'ami-0c73cd1c5347436f3'
     'eu-west-2':
-      AMI: 'ami-e3051987'
+      AMI: 'ami-029ed17b4ea379178'
     'eu-west-1':
-      AMI: 'ami-760aaa0f'
+      AMI: 'ami-04632f3cef5083854'
+    'ap-northeast-3':
+      AMI: 'ami-0ae88850834d2c589'
     'ap-northeast-2':
-      AMI: 'ami-fc862292'
+      AMI: 'ami-0263588f2531a56bd'
     'ap-northeast-1':
-      AMI: 'ami-2803ac4e'
+      AMI: 'ami-0abaa5b0faf689830'
     'sa-east-1':
-      AMI: 'ami-1678037a'
+      AMI: 'ami-053a035b046dbb704'
     'ca-central-1':
-      AMI: 'ami-ef3b838b'
+      AMI: 'ami-0173297cea9ba27b0'
     'ap-southeast-1':
-      AMI: 'ami-dd7935be'
+      AMI: 'ami-0d1d4b8d5a0cd293f'
     'ap-southeast-2':
-      AMI: 'ami-1a668878'
+      AMI: 'ami-0f4484f62c4fd8767'
     'eu-central-1':
-      AMI: 'ami-e28d098d'
+      AMI: 'ami-099ccc441b2ef41ec'
     'us-east-1':
-      AMI: 'ami-6057e21a'
+      AMI: 'ami-061ac2e015473fbe2'
     'us-east-2':
-      AMI: 'ami-aa1b34cf'
+      AMI: 'ami-056b1936002ca8ede'
     'us-west-1':
-      AMI: 'ami-1a033c7a'
+      AMI: 'ami-028f2b5ee08012131'
     'us-west-2':
-      AMI: 'ami-32d8124a'
+      AMI: 'ami-0e21d4d9303512b8e'
 Resources:
   ##########################################################################
   #                                                                        #
@@ -175,29 +175,6 @@ Resources:
   #                   Auto Scaling Group running Jenkins                   #
   #                                                                        #
   ##########################################################################
-  IamRole:
-    Type: 'AWS::IAM::Role'
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service: 'ec2.amazonaws.com'
-          Action: 'sts:AssumeRole'
-      Policies:
-      - PolicyName: root
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Action: 'ec2:AssociateAddress'
-            Resource: '*'
-            Effect: Allow
-  IamInstanceProfile:
-    Type: 'AWS::IAM::InstanceProfile'
-    Properties:
-      Roles:
-      - !Ref IamRole
   SecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -208,10 +185,6 @@ Resources:
         Value: 'jenkins-multiaz-efs-eip'
       SecurityGroupIngress:
       - IpProtocol: tcp
-        FromPort: 22
-        ToPort: 22
-        CidrIp: '0.0.0.0/0'
-      - IpProtocol: tcp
         FromPort: 8080
         ToPort: 8080
         CidrIp: '0.0.0.0/0'
@@ -219,58 +192,65 @@ Resources:
         FromPort: -1
         ToPort: -1
         CidrIp: '0.0.0.0/0'
-  LaunchConfiguration:
-    Type: 'AWS::AutoScaling::LaunchConfiguration'
+  LaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref IamInstanceProfile
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceMonitoring: false
-      InstanceType: 't2.micro'
-      KeyName: !Ref KeyName
-      SecurityGroups:
-      - !Ref SecurityGroup
-      UserData:
-        'Fn::Base64': !Sub |
-          #!/bin/bash -x
-          bash -ex << "TRY"
-            # attach EIP
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Name: !Ref IamInstanceProfile
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        Monitoring:
+          Enabled: false
+        InstanceType: 't2.micro'
+        NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          Groups:
+          - !Ref SecurityGroup
+        UserData:
+          'Fn::Base64': !Sub |
+            #!/bin/bash -ex
+            trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}' ERR
+
+            # Attaching EIP
             INSTANCE_ID="$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
             aws --region ${AWS::Region} ec2 associate-address --instance-id $INSTANCE_ID --allocation-id ${ElasticIP.AllocationId}
 
-            # install Jenkins
-            wget -q -T 60 https://pkg.jenkins.io/redhat/jenkins-1.616-1.1.noarch.rpm
-            rpm --install jenkins-1.616-1.1.noarch.rpm
+            # Installing Jenkins
+            amazon-linux-extras enable epel=7.11 && yum -y clean metadata
+            yum install -y epel-release && yum -y clean metadata
+            yum install -y java-11-amazon-corretto-headless daemonize amazon-efs-utils
+            wget -q -T 60 http://ftp-chi.osuosl.org/pub/jenkins/redhat-stable/jenkins-2.319.1-1.1.noarch.rpm
+            rpm --install jenkins-2.319.1-1.1.noarch.rpm
+            
+            # Mounting EFS volume
+            mkdir -p /var/lib/jenkins
+            echo "${FileSystem}:/ /var/lib/jenkins efs tls,_netdev 0 0" >> /etc/fstab
+            while ! (echo > /dev/tcp/${FileSystem}.efs.${AWS::Region}.amazonaws.com/2049) >/dev/null 2>&1; do sleep 5; done
+            mount -a -t efs
+            chown -R jenkins:jenkins /var/lib/jenkins
 
-            # wait until EFS file system is available
-            while ! nc -z ${FileSystem}.efs.${AWS::Region}.amazonaws.com 2049; do sleep 10; done
-            sleep 10
-
-            # mount EFS file system
-            echo "${FileSystem}.efs.${AWS::Region}.amazonaws.com:/ /var/lib/jenkins nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,_netdev 0 0" >> /etc/fstab
-            mount -a
-            chown jenkins:jenkins /var/lib/jenkins/
-
-            # configure Jenkins
+            # Configuring Jenkins
             sed -i -e 's/JENKINS_ARGS=""/JENKINS_ARGS="--argumentsRealm.passwd.admin=${JenkinsAdminPassword} --argumentsRealm.roles.admin=admin"/g' /etc/sysconfig/jenkins
             if [ ! -f /var/lib/jenkins/config.xml ]; then
               echo '<?xml version="1.0" encoding="UTF-8"?><hudson><version>1.0</version><useSecurity>true</useSecurity><authorizationStrategy class="hudson.security.FullControlOnceLoggedInAuthorizationStrategy"/><securityRealm class="hudson.security.LegacySecurityRealm"/></hudson>' > /var/lib/jenkins/config.xml
               chown jenkins:jenkins /var/lib/jenkins/config.xml
             fi
 
-            # start jenkins
-            service jenkins start
-          TRY
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
+            # Starting Jenkins
+            systemctl enable jenkins.service
+            systemctl start jenkins.service
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
   AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
-      LaunchConfigurationName: !Ref LaunchConfiguration
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
       Tags:
       - Key: Name
         Value: 'jenkins-multiaz-efs-eip'
         PropagateAtLaunch: true
-      DesiredCapacity: 1
       MinSize: 1
       MaxSize: 1
       VPCZoneIdentifier:
@@ -282,6 +262,39 @@ Resources:
       ResourceSignal:
         Timeout: PT10M
     DependsOn: VPCGatewayAttachment
+  IamRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: ec2
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Action: 'ec2:AssociateAddress'
+            Resource: '*'
+            Effect: Allow
+      - PolicyName: ssm
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            Resource: '*'
+  IamInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+      - !Ref IamRole
 Outputs:
   JenkinsURL:
     Description: 'URL to access web interface of Jenkins server.'
