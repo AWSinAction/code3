@@ -214,7 +214,8 @@ Resources:
 
             # Attaching EIP
             INSTANCE_ID="$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
-            aws --region ${AWS::Region} ec2 associate-address --instance-id $INSTANCE_ID --allocation-id ${ElasticIP.AllocationId}
+            aws --region ${AWS::Region} ec2 associate-address --instance-id $INSTANCE_ID --allocation-id ${ElasticIP.AllocationId} --allow-reassociation
+            sleep 30
 
             # Installing Jenkins
             amazon-linux-extras enable epel=7.11 && yum -y clean metadata
