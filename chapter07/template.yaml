@@ -2,24 +2,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Adding an owner tag to EC2 instances automatically
-Parameters:
-  CreateCloudTrail:
-    Description: 'Create CloudTrail (set to false if CloudTrail is already enabled in your account).'
-    Type: String
-    Default: 'true'
-    AllowedValues: ['true', 'false']
-Conditions:
-  HasCreateCloudTrail: !Equals [!Ref CreateCloudTrail, 'true']
 Resources:
   TrailBucket:
-    Condition: HasCreateCloudTrail
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Type: 'AWS::S3::Bucket'
     Properties:
       BucketName: !Sub '${AWS::StackName}-${AWS::AccountId}'
   TrailBucketPolicy:
-    Condition: HasCreateCloudTrail
     Type: 'AWS::S3::BucketPolicy'
     Properties:
       Bucket: !Ref TrailBucket
@@ -42,7 +30,6 @@ Resources:
             StringEquals:
               's3:x-amz-acl': 'bucket-owner-full-control'
   Trail:
-    Condition: HasCreateCloudTrail
     DependsOn: TrailBucketPolicy
     Type: 'AWS::CloudTrail::Trail'
     Properties:
@@ -64,14 +51,16 @@ Resources:
           Action: 'ec2:CreateTags'
           Resource: '*'
       Events:
-        CloudTrail:
-          Type: CloudWatchEvent
+        EventBridgeRule:
+          Type: EventBridgeRule
           Properties:
             Pattern:
-              detail-type:
-              - 'AWS API Call via CloudTrail'
               source:
               - 'aws.ec2'
+              detail-type:
+              - 'AWS API Call via CloudTrail'
               detail:
+                eventSource:
+                - 'ec2.amazonaws.com'
                 eventName:
                 - 'RunInstances'
