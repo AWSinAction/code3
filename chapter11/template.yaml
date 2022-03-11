@@ -126,18 +126,18 @@ Resources:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
       Subnets:
-        - Ref: SubnetA
-        - Ref: SubnetB
+      - Ref: SubnetA
+      - Ref: SubnetB
       SecurityGroups:
-        - !Ref LoadBalancerSecurityGroup
+      - !Ref LoadBalancerSecurityGroup
       Scheme: 'internet-facing'
     DependsOn: VPCGatewayAttachment
   LoadBalancerListener:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
     Properties:
       DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref LoadBalancerTargetGroup
+      - Type: forward
+        TargetGroupArn: !Ref LoadBalancerTargetGroup
       LoadBalancerArn: !Ref LoadBalancer
       Port: 80
       Protocol: HTTP
@@ -162,30 +162,30 @@ Resources:
       GroupDescription: 'awsinaction-elb-sg'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - CidrIp: '0.0.0.0/0'
-          FromPort: 80
-          IpProtocol: tcp
-          ToPort: 80
+      - CidrIp: '0.0.0.0/0'
+        FromPort: 80
+        IpProtocol: tcp
+        ToPort: 80
   WebServerSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: 'awsinaction-sg'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - FromPort: 80
-          IpProtocol: tcp
-          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
-          ToPort: 80
+      - FromPort: 80
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+        ToPort: 80
   DatabaseSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: 'awsinaction-db-sg'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+        SourceSecurityGroupId: !Ref WebServerSecurityGroup
   Database:
     Type: 'AWS::RDS::DBInstance'
     DeletionPolicy: Delete # For AWS::RDS::DBInstance resources that don't specify the DBClusterIdentifier property, the default policy is Snapshot which can cause unwanted costs. However, for production setups, we highly recommend to stay with the default to avoid data loss.
@@ -198,7 +198,7 @@ Resources:
       MasterUsername: wordpress
       MasterUserPassword: wordpress
       VPCSecurityGroups:
-        - !Sub ${DatabaseSecurityGroup.GroupId}
+      - !Sub ${DatabaseSecurityGroup.GroupId}
       DBSubnetGroupName: !Ref DBSubnetGroup
     DependsOn: VPCGatewayAttachment
   DBSubnetGroup:
@@ -206,64 +206,64 @@ Resources:
     Properties:
       DBSubnetGroupDescription: DB subnet group
       SubnetIds:
-        - Ref: SubnetA
-        - Ref: SubnetB
+      - Ref: SubnetA
+      - Ref: SubnetB
   EFSFileSystem:
     Type: 'AWS::EFS::FileSystem'
     Properties:
       FileSystemTags:
-        - Key: Name
-          Value: 'wordpress-efs'
+      - Key: Name
+        Value: 'wordpress-efs'
   EFSMountTargetA:
     Type: 'AWS::EFS::MountTarget'
     Properties:
       FileSystemId: !Ref EFSFileSystem
       SubnetId: !Ref SubnetA
       SecurityGroups:
-        - !Ref EFSSecurityGroup
+      - !Ref EFSSecurityGroup
   EFSMountTargetB:
     Type: 'AWS::EFS::MountTarget'
     Properties:
       FileSystemId: !Ref EFSFileSystem
       SubnetId: !Ref SubnetB
       SecurityGroups:
-        - !Ref EFSSecurityGroup
+      - !Ref EFSSecurityGroup
   EFSSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: 'Allowing access to EFS'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 2049
-          ToPort: 2049
-          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 2049
+        ToPort: 2049
+        SourceSecurityGroupId: !Ref WebServerSecurityGroup
   InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
       Roles:
-        - !Ref InstanceRole
+      - !Ref InstanceRole
   InstanceRole:
     Type: 'AWS::IAM::Role'
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Effect: Allow
-            Principal:
-              Service: 'ec2.amazonaws.com'
-            Action: 'sts:AssumeRole'
+        - Effect: Allow
+          Principal:
+            Service: 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
       Policies:
-        - PolicyName: ssm
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
-                  - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
-                  - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
-                Resource: '*'
+      - PolicyName: ssm
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            Resource: '*'
   LaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
     Metadata:
@@ -328,24 +328,24 @@ Resources:
               group: root
             '/root/wordpress.sh':
               content: !Sub
-                - |
-                  #!/bin/bash -ex
-                  # ensure than only one machine installs wp
-                  if mkdir /var/www/lock; then
-                    cd /var/www/html
-                    wget --quiet --timeout=60 --output-document=wp-cli.phar https://github.com/wp-cli/wp-cli/releases/download/v2.5.0/wp-cli-2.5.0.phar
-                    if ! php wp-cli.phar core is-installed --allow-root; then
-                      php wp-cli.phar core download --allow-root --version=5.8.2
-                      php wp-cli.phar core config --dbname='wordpress' --dbuser='wordpress' --dbpass='wordpress' --dbhost='${DBHost}' --allow-root
-                      php wp-cli.phar core install --url='http://${DomainName}' --title='AWS in Action' --admin_user='admin' --admin_password='${WordpressAdminPassword}' --admin_email='test@example.com' --skip-email --allow-root
-                    fi
-                    chown -R apache:apache /var/www/html
-                    chmod u+wrx /var/www/html/wp-content/*
-                    rm -f wp-cli.phar
+              - |
+                #!/bin/bash -ex
+                # ensure than only one machine installs wp
+                if mkdir /var/www/lock; then
+                  cd /var/www/html
+                  wget --quiet --timeout=60 --output-document=wp-cli.phar https://github.com/wp-cli/wp-cli/releases/download/v2.5.0/wp-cli-2.5.0.phar
+                  if ! php wp-cli.phar core is-installed --allow-root; then
+                    php wp-cli.phar core download --allow-root --version=5.8.2
+                    php wp-cli.phar core config --dbname='wordpress' --dbuser='wordpress' --dbpass='wordpress' --dbhost='${DBHost}' --allow-root
+                    php wp-cli.phar core install --url='http://${DomainName}' --title='AWS in Action' --admin_user='admin' --admin_password='${WordpressAdminPassword}' --admin_email='test@example.com' --skip-email --allow-root
                   fi
-                - WordpressAdminPassword: !Ref WordpressAdminPassword
-                  DBHost: !GetAtt 'Database.Endpoint.Address'
-                  DomainName: !GetAtt 'LoadBalancer.DNSName'
+                  chown -R apache:apache /var/www/html
+                  chmod u+wrx /var/www/html/wp-content/*
+                  rm -f wp-cli.phar
+                fi
+              - WordpressAdminPassword: !Ref WordpressAdminPassword
+                DBHost: !GetAtt 'Database.Endpoint.Address'
+                DomainName: !GetAtt 'LoadBalancer.DNSName'
               mode: '000500'
               owner: root
               group: root
@@ -367,10 +367,10 @@ Resources:
     Properties:
       LaunchTemplateData:
         BlockDeviceMappings:
-          - DeviceName: '/dev/xvda'
-            Ebs:
-              Encrypted: true
-              VolumeType: gp3
+        - DeviceName: '/dev/xvda'
+          Ebs:
+            Encrypted: true
+            VolumeType: gp3
         IamInstanceProfile:
           Name: !Ref InstanceProfile
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
@@ -380,10 +380,10 @@ Resources:
         MetadataOptions:
           HttpTokens: required
         NetworkInterfaces:
-          - AssociatePublicIpAddress: true
-            DeviceIndex: 0
-            Groups:
-              - !Ref WebServerSecurityGroup
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          Groups:
+          - !Ref WebServerSecurityGroup
         UserData:
           'Fn::Base64': !Sub |
             #!/bin/bash -ex
@@ -393,11 +393,11 @@ Resources:
   AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     DependsOn:
-      - EFSMountTargetA
-      - EFSMountTargetB
+    - EFSMountTargetA
+    - EFSMountTargetB
     Properties:
       TargetGroupARNs:
-        - !Ref LoadBalancerTargetGroup
+      - !Ref LoadBalancerTargetGroup
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
@@ -406,12 +406,12 @@ Resources:
       HealthCheckGracePeriod: 300
       HealthCheckType: ELB
       VPCZoneIdentifier:
-        - !Ref SubnetA
-        - !Ref SubnetB
+      - !Ref SubnetA
+      - !Ref SubnetB
       Tags:
-        - PropagateAtLaunch: true
-          Value: wordpress
-          Key: Name
+      - PropagateAtLaunch: true
+        Value: wordpress
+        Key: Name
     CreationPolicy:
       ResourceSignal:
         Timeout: PT10M
