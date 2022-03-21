@@ -2,45 +2,45 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AWS in Action: chapter 12'
 Parameters:
-  KeyName:
-    Description: 'Key Pair name'
-    Type: 'AWS::EC2::KeyPair::KeyName'
-    Default: mykey
   AdminEmailAddress:
     Description: 'Email address of admin user'
     Type: 'String'
 Mappings:
   RegionMap:
+    'eu-north-1':
+      AMI: 'ami-05bc2576a72f22c39'
     'ap-south-1':
-      AMI: 'ami-2ed19c41'
+      AMI: 'ami-0002bdad91f793433'
     'eu-west-3':
-      AMI: 'ami-c8a017b5'
+      AMI: 'ami-0c73cd1c5347436f3'
     'eu-west-2':
-      AMI: 'ami-e3051987'
+      AMI: 'ami-029ed17b4ea379178'
     'eu-west-1':
-      AMI: 'ami-760aaa0f'
+      AMI: 'ami-04632f3cef5083854'
+    'ap-northeast-3':
+      AMI: 'ami-0ae88850834d2c589'
     'ap-northeast-2':
-      AMI: 'ami-fc862292'
+      AMI: 'ami-0263588f2531a56bd'
     'ap-northeast-1':
-      AMI: 'ami-2803ac4e'
+      AMI: 'ami-0abaa5b0faf689830'
     'sa-east-1':
-      AMI: 'ami-1678037a'
+      AMI: 'ami-053a035b046dbb704'
     'ca-central-1':
-      AMI: 'ami-ef3b838b'
+      AMI: 'ami-0173297cea9ba27b0'
     'ap-southeast-1':
-      AMI: 'ami-dd7935be'
+      AMI: 'ami-0d1d4b8d5a0cd293f'
     'ap-southeast-2':
-      AMI: 'ami-1a668878'
+      AMI: 'ami-0f4484f62c4fd8767'
     'eu-central-1':
-      AMI: 'ami-e28d098d'
+      AMI: 'ami-099ccc441b2ef41ec'
     'us-east-1':
-      AMI: 'ami-6057e21a'
+      AMI: 'ami-061ac2e015473fbe2'
     'us-east-2':
-      AMI: 'ami-aa1b34cf'
+      AMI: 'ami-056b1936002ca8ede'
     'us-west-1':
-      AMI: 'ami-1a033c7a'
+      AMI: 'ami-028f2b5ee08012131'
     'us-west-2':
-      AMI: 'ami-32d8124a'
+      AMI: 'ami-0e21d4d9303512b8e'
 Resources:
   ##########################################################################
   #                                                                        #
@@ -142,14 +142,14 @@ Resources:
       IpProtocol: tcp
       FromPort: 6379
       ToPort: 6379
-      SourceSecurityGroupId: !Ref VMSecurityGroup
+      SourceSecurityGroupId: !Ref InstanceSecurityGroup
   Cache:
     Type: 'AWS::ElastiCache::CacheCluster'
     Properties:
       CacheNodeType: 'cache.t2.micro'
       CacheSubnetGroupName: !Ref CacheSubnetGroup
       Engine: redis
-      EngineVersion: '3.2.4'
+      EngineVersion: '6.2'
       NumCacheNodes: 1
       VpcSecurityGroupIds:
       - !Ref CacheSecurityGroup
@@ -177,7 +177,7 @@ Resources:
       IpProtocol: tcp
       FromPort: 5432
       ToPort: 5432
-      SourceSecurityGroupId: !Ref VMSecurityGroup
+      SourceSecurityGroupId: !Ref InstanceSecurityGroup
   Database:
     Type: 'AWS::RDS::DBInstance'
     DeletionPolicy: Delete # For AWS::RDS::DBInstance resources that don't specify the DBClusterIdentifier property, the default policy is Snapshot which can cause unwanted costs. However, for production setups, we highly recommend to stay with the default to avoid data loss.
@@ -187,7 +187,7 @@ Resources:
       DBInstanceClass: 'db.t2.micro'
       DBName: discourse
       Engine: postgres
-      EngineVersion: '9.6.24'
+      EngineVersion: '12.10'
       MasterUsername: discourse
       MasterUserPassword: discourse
       VPCSecurityGroups:
@@ -206,39 +206,66 @@ Resources:
   #                            Virtual machine                             #
   #                                                                        #
   ##########################################################################
-  VMSecurityGroup:
+  InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+      - !Ref InstanceRole
+  InstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: ssm
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            Resource: '*'
+  InstanceSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: 'vm'
       SecurityGroupIngress:
       - CidrIp: '0.0.0.0/0'
-        FromPort: 22
-        IpProtocol: tcp
-        ToPort: 22
-      - CidrIp: '0.0.0.0/0'
         FromPort: 80
         IpProtocol: tcp
         ToPort: 80
       VpcId: !Ref VPC
-  VMInstance:
+  Instance:
     Type: 'AWS::EC2::Instance'
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       InstanceType: 't2.micro'
-      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref InstanceProfile
       NetworkInterfaces:
       - AssociatePublicIpAddress: true
         DeleteOnTermination: true
         DeviceIndex: 0
         GroupSet:
-        - !Ref VMSecurityGroup
+        - !Ref InstanceSecurityGroup
         SubnetId: !Ref SubnetA
+      BlockDeviceMappings:
+      - DeviceName: '/dev/xvda'
+        Ebs:
+          VolumeSize: 16
+          VolumeType: gp2
       UserData:
         'Fn::Base64': !Sub |
           #!/bin/bash -x
           bash -ex << "TRY"
-            # t2.micro may not have enough memory, so we add a 512MB swapfile
-            dd if=/dev/zero of=/swapfile1 bs=1024 count=524288
+            # t2.micro may not have enough memory, so we add a 1024MB swapfile
+            dd if=/dev/zero of=/swapfile1 bs=1024 count=1048576
             chmod 0600 /swapfile1
             mkswap /swapfile1
             swapon /swapfile1
@@ -248,63 +275,47 @@ Resources:
             PUBLICIP="$(curl -s -m 60 http://169.254.169.254/latest/meta-data/public-ipv4)"
 
             # install packages
-            yum -y group install "Development Tools"
-            yum -y install git zlib-devel postgresql95-devel libyaml-devel ImageMagick ruby23-devel nginx
-            yum -y install --enablerepo=epel optipng jhead jpegoptim gifsicle libjpeg-turbo-utils
-            update-alternatives --set ruby /usr/bin/ruby2.3
-            gem install bundler -v "< 2.0, >= 1.3.0" --no-ri --no-rdoc
-
-            # download Discourse
-            useradd discourse
-            mkdir /opt/discourse
-            git clone https://github.com/AWSinAction/discourse.git /opt/discourse
-
-            # configure Discourse
-            echo "gem 'psych'" >> /opt/discourse/Gemfile
-            echo "gem 'json'" >> /opt/discourse/Gemfile
-            echo "gem 'bigdecimal'" >> /opt/discourse/Gemfile
-            echo "db_host = \"${Database.Endpoint.Address}\"" > /opt/discourse/config/discourse.conf
-            echo "db_password = \"discourse\"" >> /opt/discourse/config/discourse.conf
-            echo "redis_host = \"${Cache.RedisEndpoint.Address}\"" >> /opt/discourse/config/discourse.conf
-            echo "hostname = \"$PUBLICIP\"" >> /opt/discourse/config/discourse.conf
-            echo "serve_static_assets = true" >> /opt/discourse/config/discourse.conf
-            echo "developer_emails = \"${AdminEmailAddress}\"" >> /opt/discourse/config/discourse.conf
-            echo "notification_email = \"${AdminEmailAddress}\"" >> /opt/discourse/config/discourse.conf
-            echo "smtp_address = \"localhost\"" >> /opt/discourse/config/discourse.conf
-            echo "smtp_port = 25" >> /opt/discourse/config/discourse.conf
-            echo "smtp_enable_start_tls = false" >> /opt/discourse/config/discourse.conf
-            echo "smtp_openssl_verify_mode = none" >> /opt/discourse/config/discourse.conf
-            sed -i 's/development:/production:/g' /opt/discourse/config/sidekiq.yml
-            chown -R discourse:discourse /opt/discourse
-
-            # prepare Discourse
-            runuser -l discourse -c 'cd /opt/discourse && bundle install'
-            runuser -l discourse -c 'cd /opt/discourse && RAILS_ENV=production bundle exec rake db:migrate'
-            runuser -l discourse -c 'cd /opt/discourse && RAILS_ENV=production bundle exec rake assets:precompile'
-
-            # start Discourse
-            runuser -l discourse -c 'cd /opt/discourse && RAILS_ENV=production bundle exec sidekiq -L log/sidekiq.log -e production -d'
-            runuser -l discourse -c 'cd /opt/discourse && RAILS_ENV=production bundle exec rails s -d'
-
-            # configure Nginx to forward port 80 to 3000
-            echo "server {" > /etc/nginx/conf.d/discourse.conf
-            echo "  listen 80;" >> /etc/nginx/conf.d/discourse.conf
-            echo "  server_name $PUBLICIP;" >> /etc/nginx/conf.d/discourse.conf
-            echo "  location / {" >> /etc/nginx/conf.d/discourse.conf
-            echo "    proxy_pass http://127.0.0.1:3000;" >> /etc/nginx/conf.d/discourse.conf
-            echo "  }" >> /etc/nginx/conf.d/discourse.conf
-            echo "}" >> /etc/nginx/conf.d/discourse.conf
-
-            # start Nginx
-            service nginx start
+            yum install -y git
+            amazon-linux-extras install docker -y
+            systemctl start docker
+            docker run --restart always -d -p 80:80 \
+              -e "UNICORN_WORKERS=3" \
+              -e "DISCOURSE_DB_PASSWORD=discourse" \
+              -e "DISCOURSE_DEFAULT_LOCALE=en" \
+              -e "DISCOURSE_DB_USERNAME=discourse" \
+              -e "DISCOURSE_REDIS_HOST=${Cache.RedisEndpoint.Address}" \
+              -e "RUBY_GC_HEAP_GROWTH_MAX_SLOTS=40000" \
+              -e "LC_ALL=en_US.UTF-8" \
+              -e "RUBY_GLOBAL_METHOD_CACHE_SIZE=131072" \
+              -e "EMBER_CLI_PROD_ASSETS=1" \
+              -e "DISCOURSE_HOSTNAME=$PUBLICIP" \
+              -e "DISCOURSE_SMTP_ADDRESS=127.0.0.1" \
+              -e "DOCKER_HOST_IP=172.17.0.1" \
+              -e "LANG=en_US.UTF-8" \
+              -e "UNICORN_SIDEKIQS=1" \
+              -e "RUBY_GC_HEAP_OLDOBJECT_LIMIT_FACTOR=1.5" \
+              -e "DISCOURSE_DB_HOST=${Database.Endpoint.Address}" \
+              -e "LANGUAGE=en_US.UTF-8" \
+              -e "DISCOURSE_DEVELOPER_EMAILS=${AdminEmailAddress}" \
+              -e "DISCOURSE_NOTIFICATION_EMAIL=${AdminEmailAddress}" \
+              -e "RAILS_ENV=production" \
+              -e "RUBY_GC_HEAP_INIT_SLOTS=400000" \
+              -e "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+              -e "PG_MAJOR=13" \
+              -e "RUBY_ALLOCATOR=/usr/lib/libjemalloc.so.1" \
+              public.ecr.aws/awsinaction/discourse:3rd /sbin/boot
           TRY
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource VMInstance --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}
     CreationPolicy:
       ResourceSignal:
         Timeout: PT15M
     DependsOn:
     - VPCGatewayAttachment
 Outputs:
-  VMInstanceIPAddress:
-    Value: !GetAtt 'VMInstance.PublicIp'
-    Description: 'EC2 Instance public IP address (connect via SSH as user ec2-user)'
+  InstanceIPAddress:
+    Value: !GetAtt 'Instance.PublicIp'
+    Description: 'EC2 Instance public IP'
+  InstanceId:
+    Value: !Ref Instance
+    Description: 'EC2 Instance ID (connect via Session Manager)'
+
