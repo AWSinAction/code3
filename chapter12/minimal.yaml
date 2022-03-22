@@ -57,7 +57,7 @@ Resources:
       - IpProtocol: tcp
         FromPort: 6379
         ToPort: 6379
-        SourceSecurityGroupId: !Ref InstanceSecurityGroup
+        CidrIp: '0.0.0.0/0'
   CacheSubnetGroup:
     Type: 'AWS::ElastiCache::SubnetGroup'
     Properties:
