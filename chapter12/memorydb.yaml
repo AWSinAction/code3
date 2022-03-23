@@ -1,10 +1,7 @@
+
 ---
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AWS in Action: chapter 12'
-Parameters:
-  AdminEmailAddress:
-    Description: 'Email address of admin user'
-    Type: 'String'
 Mappings:
   RegionMap:
     'eu-north-1':
@@ -35,6 +32,7 @@ Mappings:
       AMI: 'ami-099ccc441b2ef41ec'
     'us-east-1':
       AMI: 'ami-061ac2e015473fbe2'
+      AvailabilityZoneIds: ['use1-az2', 'use1-az4', 'use1-az6']
     'us-east-2':
       AMI: 'ami-056b1936002ca8ede'
     'us-west-1':
@@ -63,13 +61,13 @@ Resources:
   SubnetA:
     Type: 'AWS::EC2::Subnet'
     Properties:
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZoneId: !Select [0, !FindInMap [RegionMap, !Ref 'AWS::Region', 'AvailabilityZoneIds']]
       CidrBlock: '172.31.38.0/24'
       VpcId: !Ref VPC
   SubnetB:
     Type: 'AWS::EC2::Subnet'
     Properties:
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZoneId: !Select [1, !FindInMap [RegionMap, !Ref 'AWS::Region', 'AvailabilityZoneIds']]
       CidrBlock: '172.31.37.0/24'
       VpcId: !Ref VPC
   RouteTable:
@@ -143,64 +141,33 @@ Resources:
       FromPort: 6379
       ToPort: 6379
       SourceSecurityGroupId: !Ref InstanceSecurityGroup
-  Cache:
-    Type: 'AWS::ElastiCache::CacheCluster'
+  CacheParameterGroup:
+    Type: 'AWS::MemoryDB::ParameterGroup'
     Properties:
-      CacheNodeType: 'cache.t2.micro'
-      CacheSubnetGroupName: !Ref CacheSubnetGroup
-      Engine: redis
-      EngineVersion: '6.2'
-      NumCacheNodes: 1
-      VpcSecurityGroupIds:
-      - !Ref CacheSecurityGroup
+      Description: String
+      Family: 'memorydb_redis6'
+      ParameterGroupName: !Ref 'AWS::StackName'
   CacheSubnetGroup:
-    Type: 'AWS::ElastiCache::SubnetGroup'
+    Type: 'AWS::MemoryDB::SubnetGroup'
     Properties:
-      Description: cache
+      SubnetGroupName: !Ref 'AWS::StackName'
       SubnetIds:
-      - Ref: SubnetA
-      - Ref: SubnetB
-  ##########################################################################
-  #                                                                        #
-  #                                Database                                #
-  #                                                                        #
-  ##########################################################################
-  DatabaseSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
+      - !Ref SubnetA
+      - !Ref SubnetB
+  CacheCluster:
+    Type: 'AWS::MemoryDB::Cluster'
     Properties:
-      GroupDescription: database
-      VpcId: !Ref VPC
-  DatabaseSecurityGroupIngress:
-    Type: 'AWS::EC2::SecurityGroupIngress'
-    Properties:
-      GroupId: !Ref DatabaseSecurityGroup
-      IpProtocol: tcp
-      FromPort: 5432
-      ToPort: 5432
-      SourceSecurityGroupId: !Ref InstanceSecurityGroup
-  Database:
-    Type: 'AWS::RDS::DBInstance'
-    DeletionPolicy: Delete # For AWS::RDS::DBInstance resources that don't specify the DBClusterIdentifier property, the default policy is Snapshot which can cause unwanted costs. However, for production setups, we highly recommend to stay with the default to avoid data loss.
-    Properties:
-      AllocatedStorage: 5
-      BackupRetentionPeriod: 0
-      DBInstanceClass: 'db.t2.micro'
-      DBName: discourse
-      Engine: postgres
-      EngineVersion: '12.10'
-      MasterUsername: discourse
-      MasterUserPassword: discourse
-      VPCSecurityGroups:
-      - !Sub ${DatabaseSecurityGroup.GroupId}
-      DBSubnetGroupName: !Ref DatabaseSubnetGroup
-    DependsOn: VPCGatewayAttachment
-  DatabaseSubnetGroup:
-    Type: 'AWS::RDS::DBSubnetGroup'
-    Properties:
-      DBSubnetGroupDescription: database
-      SubnetIds:
-      - Ref: SubnetA
-      - Ref: SubnetB
+      ACLName: 'open-access'
+      ClusterName: !Ref 'AWS::StackName'
+      EngineVersion: '6.2'
+      NodeType: 'db.t4g.small'
+      NumReplicasPerShard: 0
+      NumShards: 1
+      ParameterGroupName: !Ref CacheParameterGroup
+      SecurityGroupIds:
+      - !Ref CacheSecurityGroup
+      SubnetGroupName: !Ref CacheSubnetGroup
+      TLSEnabled: false
   ##########################################################################
   #                                                                        #
   #                            Virtual machine                             #
@@ -236,11 +203,6 @@ Resources:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: 'vm'
-      SecurityGroupIngress:
-      - CidrIp: '0.0.0.0/0'
-        FromPort: 80
-        IpProtocol: tcp
-        ToPort: 80
       VpcId: !Ref VPC
   Instance:
     Type: 'AWS::EC2::Instance'
@@ -249,72 +211,15 @@ Resources:
       InstanceType: 't2.micro'
       IamInstanceProfile: !Ref InstanceProfile
       NetworkInterfaces:
-      - AssociatePublicIpAddress: true
+      - AssociatePublicIpAddress: false
         DeleteOnTermination: true
         DeviceIndex: 0
         GroupSet:
         - !Ref InstanceSecurityGroup
         SubnetId: !Ref SubnetA
-      BlockDeviceMappings:
-      - DeviceName: '/dev/xvda'
-        Ebs:
-          VolumeSize: 16
-          VolumeType: gp2
-      UserData:
-        'Fn::Base64': !Sub |
-          #!/bin/bash -x
-          bash -ex << "TRY"
-            # t2.micro may not have enough memory, so we add a 1024MB swapfile
-            dd if=/dev/zero of=/swapfile1 bs=1024 count=1048576
-            chmod 0600 /swapfile1
-            mkswap /swapfile1
-            swapon /swapfile1
-            echo "/swapfile1 none swap sw 0 0" >> /etc/fstab
-
-            # get public IP address of this EC2 instance
-            PUBLICIP="$(curl -s -m 60 http://169.254.169.254/latest/meta-data/public-ipv4)"
-
-            # install packages
-            yum install -y git
-            amazon-linux-extras install docker -y
-            systemctl start docker
-            docker run --restart always -d -p 80:80 \
-              -e "UNICORN_WORKERS=3" \
-              -e "DISCOURSE_DB_PASSWORD=discourse" \
-              -e "DISCOURSE_DEFAULT_LOCALE=en" \
-              -e "DISCOURSE_DB_USERNAME=discourse" \
-              -e "DISCOURSE_REDIS_HOST=${Cache.RedisEndpoint.Address}" \
-              -e "RUBY_GC_HEAP_GROWTH_MAX_SLOTS=40000" \
-              -e "LC_ALL=en_US.UTF-8" \
-              -e "RUBY_GLOBAL_METHOD_CACHE_SIZE=131072" \
-              -e "EMBER_CLI_PROD_ASSETS=1" \
-              -e "DISCOURSE_HOSTNAME=$PUBLICIP" \
-              -e "DISCOURSE_SMTP_ADDRESS=127.0.0.1" \
-              -e "DOCKER_HOST_IP=172.17.0.1" \
-              -e "LANG=en_US.UTF-8" \
-              -e "UNICORN_SIDEKIQS=1" \
-              -e "RUBY_GC_HEAP_OLDOBJECT_LIMIT_FACTOR=1.5" \
-              -e "DISCOURSE_DB_HOST=${Database.Endpoint.Address}" \
-              -e "LANGUAGE=en_US.UTF-8" \
-              -e "DISCOURSE_DEVELOPER_EMAILS=${AdminEmailAddress}" \
-              -e "DISCOURSE_NOTIFICATION_EMAIL=${AdminEmailAddress}" \
-              -e "RAILS_ENV=production" \
-              -e "RUBY_GC_HEAP_INIT_SLOTS=400000" \
-              -e "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-              -e "PG_MAJOR=13" \
-              -e "RUBY_ALLOCATOR=/usr/lib/libjemalloc.so.1" \
-              public.ecr.aws/awsinaction/discourse:3rd /sbin/boot
-          TRY
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: PT15M
     DependsOn:
     - VPCGatewayAttachment
 Outputs:
-  InstanceIPAddress:
-    Value: !GetAtt 'Instance.PublicIp'
-    Description: 'EC2 Instance public IP'
   InstanceId:
     Value: !Ref Instance
     Description: 'EC2 Instance ID (connect via Session Manager)'
