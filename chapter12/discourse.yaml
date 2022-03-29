@@ -395,8 +395,9 @@ Resources:
               -e "PG_MAJOR=13" \
               -e "RUBY_ALLOCATOR=/usr/lib/libjemalloc.so.1" \
               public.ecr.aws/awsinaction/discourse:3rd /sbin/boot
-              
+            
             docker exec discourse /bin/sh -c "cd /var/www/discourse && rake db:migrate"
+            docker restart discourse
           TRY
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}
     CreationPolicy:

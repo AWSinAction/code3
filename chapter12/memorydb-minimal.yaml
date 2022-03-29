@@ -6,39 +6,49 @@ Mappings:
   RegionMap:
     'eu-north-1':
       AMI: 'ami-05bc2576a72f22c39'
+      AvailabilityZoneIds: ['eun1-az1', 'eun1-az2', 'eun1-az3']
     'ap-south-1':
       AMI: 'ami-0002bdad91f793433'
-    'eu-west-3':
-      AMI: 'ami-0c73cd1c5347436f3'
+      AvailabilityZoneIds: ['aps1-az1', 'aps1-az2', 'aps1-az3']
     'eu-west-2':
       AMI: 'ami-029ed17b4ea379178'
+      AvailabilityZoneIds: ['euw2-az1', 'euw2-az2', 'euw2-az3']
     'eu-west-1':
       AMI: 'ami-04632f3cef5083854'
-    'ap-northeast-3':
-      AMI: 'ami-0ae88850834d2c589'
+      AvailabilityZoneIds: ['euw1-az1', 'euw1-az2', 'euw1-az3']
     'ap-northeast-2':
       AMI: 'ami-0263588f2531a56bd'
+      AvailabilityZoneIds: ['apne2-az1', 'apne2-az2', 'apne2-az3']
     'ap-northeast-1':
       AMI: 'ami-0abaa5b0faf689830'
+      AvailabilityZoneIds: ['apne1-az1', 'apne1-az2', 'apne1-az4']
     'sa-east-1':
       AMI: 'ami-053a035b046dbb704'
+      AvailabilityZoneIds: ['sae1-az1', 'sae1-az2', 'sae1-az3']
     'ca-central-1':
       AMI: 'ami-0173297cea9ba27b0'
+      AvailabilityZoneIds: ['cac1-az1', 'cac1-az2', 'cac1-az3']
     'ap-southeast-1':
       AMI: 'ami-0d1d4b8d5a0cd293f'
+      AvailabilityZoneIds: ['apse1-az1', 'apse1-az2', 'apse1-az3']
     'ap-southeast-2':
       AMI: 'ami-0f4484f62c4fd8767'
+      AvailabilityZoneIds: ['apse2-az1', 'apse2-az2', 'apse2-az3']
     'eu-central-1':
       AMI: 'ami-099ccc441b2ef41ec'
+      AvailabilityZoneIds: ['euc1-az1', 'euc1-az2', 'euc1-az3']
     'us-east-1':
       AMI: 'ami-061ac2e015473fbe2'
       AvailabilityZoneIds: ['use1-az2', 'use1-az4', 'use1-az6']
     'us-east-2':
       AMI: 'ami-056b1936002ca8ede'
+      AvailabilityZoneIds: ['use2-az1', 'use2-az2', 'use2-az3']
     'us-west-1':
       AMI: 'ami-028f2b5ee08012131'
+      AvailabilityZoneIds: ['usw1-az1', 'usw1-az2', 'usw1-az3']
     'us-west-2':
       AMI: 'ami-0e21d4d9303512b8e'
+      AvailabilityZoneIds: ['usw2-az1', 'usw2-az2', 'usw2-az3']
 Resources:
   ##########################################################################
   #                                                                        #
@@ -211,7 +221,7 @@ Resources:
       InstanceType: 't2.micro'
       IamInstanceProfile: !Ref InstanceProfile
       NetworkInterfaces:
-      - AssociatePublicIpAddress: false
+      - AssociatePublicIpAddress: true
         DeleteOnTermination: true
         DeviceIndex: 0
         GroupSet:
@@ -223,4 +233,7 @@ Outputs:
   InstanceId:
     Value: !Ref Instance
     Description: 'EC2 Instance ID (connect via Session Manager)'
+  CacheAddress:
+    Value: !GetAtt 'CacheCluster.ClusterEndpoint.Address'
+    Description: 'Cache cluster DNS name (resolves to a private IP address)'
 
