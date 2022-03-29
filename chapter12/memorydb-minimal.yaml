@@ -1,0 +1,239 @@
+
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS in Action: chapter 12'
+Mappings:
+  RegionMap:
+    'eu-north-1':
+      AMI: 'ami-05bc2576a72f22c39'
+      AvailabilityZoneIds: ['eun1-az1', 'eun1-az2', 'eun1-az3']
+    'ap-south-1':
+      AMI: 'ami-0002bdad91f793433'
+      AvailabilityZoneIds: ['aps1-az1', 'aps1-az2', 'aps1-az3']
+    'eu-west-2':
+      AMI: 'ami-029ed17b4ea379178'
+      AvailabilityZoneIds: ['euw2-az1', 'euw2-az2', 'euw2-az3']
+    'eu-west-1':
+      AMI: 'ami-04632f3cef5083854'
+      AvailabilityZoneIds: ['euw1-az1', 'euw1-az2', 'euw1-az3']
+    'ap-northeast-2':
+      AMI: 'ami-0263588f2531a56bd'
+      AvailabilityZoneIds: ['apne2-az1', 'apne2-az2', 'apne2-az3']
+    'ap-northeast-1':
+      AMI: 'ami-0abaa5b0faf689830'
+      AvailabilityZoneIds: ['apne1-az1', 'apne1-az2', 'apne1-az4']
+    'sa-east-1':
+      AMI: 'ami-053a035b046dbb704'
+      AvailabilityZoneIds: ['sae1-az1', 'sae1-az2', 'sae1-az3']
+    'ca-central-1':
+      AMI: 'ami-0173297cea9ba27b0'
+      AvailabilityZoneIds: ['cac1-az1', 'cac1-az2', 'cac1-az3']
+    'ap-southeast-1':
+      AMI: 'ami-0d1d4b8d5a0cd293f'
+      AvailabilityZoneIds: ['apse1-az1', 'apse1-az2', 'apse1-az3']
+    'ap-southeast-2':
+      AMI: 'ami-0f4484f62c4fd8767'
+      AvailabilityZoneIds: ['apse2-az1', 'apse2-az2', 'apse2-az3']
+    'eu-central-1':
+      AMI: 'ami-099ccc441b2ef41ec'
+      AvailabilityZoneIds: ['euc1-az1', 'euc1-az2', 'euc1-az3']
+    'us-east-1':
+      AMI: 'ami-061ac2e015473fbe2'
+      AvailabilityZoneIds: ['use1-az2', 'use1-az4', 'use1-az6']
+    'us-east-2':
+      AMI: 'ami-056b1936002ca8ede'
+      AvailabilityZoneIds: ['use2-az1', 'use2-az2', 'use2-az3']
+    'us-west-1':
+      AMI: 'ami-028f2b5ee08012131'
+      AvailabilityZoneIds: ['usw1-az1', 'usw1-az2', 'usw1-az3']
+    'us-west-2':
+      AMI: 'ami-0e21d4d9303512b8e'
+      AvailabilityZoneIds: ['usw2-az1', 'usw2-az2', 'usw2-az3']
+Resources:
+  ##########################################################################
+  #                                                                        #
+  #                       VPC with two public subnets                      #
+  #                                                                        #
+  ##########################################################################
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: '172.31.0.0/16'
+      EnableDnsHostnames: true
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties: {}
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  SubnetA:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      AvailabilityZoneId: !Select [0, !FindInMap [RegionMap, !Ref 'AWS::Region', 'AvailabilityZoneIds']]
+      CidrBlock: '172.31.38.0/24'
+      VpcId: !Ref VPC
+  SubnetB:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      AvailabilityZoneId: !Select [1, !FindInMap [RegionMap, !Ref 'AWS::Region', 'AvailabilityZoneIds']]
+      CidrBlock: '172.31.37.0/24'
+      VpcId: !Ref VPC
+  RouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+  SubnetRouteTableAssociationA:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref SubnetA
+      RouteTableId: !Ref RouteTable
+  SubnetRouteTableAssociationB:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref SubnetB
+      RouteTableId: !Ref RouteTable
+  RouteToInternet:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+    DependsOn: VPCGatewayAttachment
+  NetworkAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref VPC
+  SubnetNetworkAclAssociationA:
+    Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+    Properties:
+      SubnetId: !Ref SubnetA
+      NetworkAclId: !Ref NetworkAcl
+  SubnetNetworkAclAssociationB:
+    Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+    Properties:
+      SubnetId: !Ref SubnetB
+      NetworkAclId: !Ref NetworkAcl
+  NetworkAclEntryIngress:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref NetworkAcl
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      Egress: false
+      CidrBlock: '0.0.0.0/0'
+  NetworkAclEntryEgress:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref NetworkAcl
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: '0.0.0.0/0'
+  ##########################################################################
+  #                                                                        #
+  #                                 Cache                                  #
+  #                                                                        #
+  ##########################################################################
+  CacheSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: cache
+      VpcId: !Ref VPC
+  CacheSecurityGroupIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref CacheSecurityGroup
+      IpProtocol: tcp
+      FromPort: 6379
+      ToPort: 6379
+      SourceSecurityGroupId: !Ref InstanceSecurityGroup
+  CacheParameterGroup:
+    Type: 'AWS::MemoryDB::ParameterGroup'
+    Properties:
+      Description: String
+      Family: 'memorydb_redis6'
+      ParameterGroupName: !Ref 'AWS::StackName'
+  CacheSubnetGroup:
+    Type: 'AWS::MemoryDB::SubnetGroup'
+    Properties:
+      SubnetGroupName: !Ref 'AWS::StackName'
+      SubnetIds:
+      - !Ref SubnetA
+      - !Ref SubnetB
+  CacheCluster:
+    Type: 'AWS::MemoryDB::Cluster'
+    Properties:
+      ACLName: 'open-access'
+      ClusterName: !Ref 'AWS::StackName'
+      EngineVersion: '6.2'
+      NodeType: 'db.t4g.small'
+      NumReplicasPerShard: 0
+      NumShards: 1
+      ParameterGroupName: !Ref CacheParameterGroup
+      SecurityGroupIds:
+      - !Ref CacheSecurityGroup
+      SubnetGroupName: !Ref CacheSubnetGroup
+      TLSEnabled: false
+  ##########################################################################
+  #                                                                        #
+  #                            Virtual machine                             #
+  #                                                                        #
+  ##########################################################################
+  InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+      - !Ref InstanceRole
+  InstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: ssm
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            Resource: '*'
+  InstanceSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'vm'
+      VpcId: !Ref VPC
+  Instance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      InstanceType: 't2.micro'
+      IamInstanceProfile: !Ref InstanceProfile
+      NetworkInterfaces:
+      - AssociatePublicIpAddress: true
+        DeleteOnTermination: true
+        DeviceIndex: 0
+        GroupSet:
+        - !Ref InstanceSecurityGroup
+        SubnetId: !Ref SubnetA
+    DependsOn:
+    - VPCGatewayAttachment
+Outputs:
+  InstanceId:
+    Value: !Ref Instance
+    Description: 'EC2 Instance ID (connect via Session Manager)'
+  CacheAddress:
+    Value: !GetAtt 'CacheCluster.ClusterEndpoint.Address'
+    Description: 'Cache cluster DNS name (resolves to a private IP address)'
+

@@ -1,0 +1,415 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS in Action: chapter 12'
+Parameters:
+  AdminEmailAddress:
+    Description: 'Email address of admin user'
+    Type: 'String'
+Mappings:
+  RegionMap:
+    'eu-north-1':
+      AMI: 'ami-05bc2576a72f22c39'
+    'ap-south-1':
+      AMI: 'ami-0002bdad91f793433'
+    'eu-west-3':
+      AMI: 'ami-0c73cd1c5347436f3'
+    'eu-west-2':
+      AMI: 'ami-029ed17b4ea379178'
+    'eu-west-1':
+      AMI: 'ami-04632f3cef5083854'
+    'ap-northeast-3':
+      AMI: 'ami-0ae88850834d2c589'
+    'ap-northeast-2':
+      AMI: 'ami-0263588f2531a56bd'
+    'ap-northeast-1':
+      AMI: 'ami-0abaa5b0faf689830'
+    'sa-east-1':
+      AMI: 'ami-053a035b046dbb704'
+    'ca-central-1':
+      AMI: 'ami-0173297cea9ba27b0'
+    'ap-southeast-1':
+      AMI: 'ami-0d1d4b8d5a0cd293f'
+    'ap-southeast-2':
+      AMI: 'ami-0f4484f62c4fd8767'
+    'eu-central-1':
+      AMI: 'ami-099ccc441b2ef41ec'
+    'us-east-1':
+      AMI: 'ami-061ac2e015473fbe2'
+    'us-east-2':
+      AMI: 'ami-056b1936002ca8ede'
+    'us-west-1':
+      AMI: 'ami-028f2b5ee08012131'
+    'us-west-2':
+      AMI: 'ami-0e21d4d9303512b8e'
+Resources:
+  ##########################################################################
+  #                                                                        #
+  #                       VPC with two public subnets                      #
+  #                                                                        #
+  ##########################################################################
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: '172.31.0.0/16'
+      EnableDnsHostnames: true
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties: {}
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  SubnetA:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '172.31.38.0/24'
+      VpcId: !Ref VPC
+  SubnetB:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '172.31.37.0/24'
+      VpcId: !Ref VPC
+  RouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+  SubnetRouteTableAssociationA:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref SubnetA
+      RouteTableId: !Ref RouteTable
+  SubnetRouteTableAssociationB:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref SubnetB
+      RouteTableId: !Ref RouteTable
+  RouteToInternet:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+    DependsOn: VPCGatewayAttachment
+  NetworkAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref VPC
+  SubnetNetworkAclAssociationA:
+    Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+    Properties:
+      SubnetId: !Ref SubnetA
+      NetworkAclId: !Ref NetworkAcl
+  SubnetNetworkAclAssociationB:
+    Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+    Properties:
+      SubnetId: !Ref SubnetB
+      NetworkAclId: !Ref NetworkAcl
+  NetworkAclEntryIngress:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref NetworkAcl
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      Egress: false
+      CidrBlock: '0.0.0.0/0'
+  NetworkAclEntryEgress:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref NetworkAcl
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: '0.0.0.0/0'
+  ##########################################################################
+  #                                                                        #
+  #                                 Cache                                  #
+  #                                                                        #
+  ##########################################################################
+  CacheSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: cache
+      VpcId: !Ref VPC
+  CacheSecurityGroupIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref CacheSecurityGroup
+      IpProtocol: tcp
+      FromPort: 6379
+      ToPort: 6379
+      SourceSecurityGroupId: !Ref InstanceSecurityGroup
+  Cache:
+    Type: 'AWS::ElastiCache::CacheCluster'
+    Properties:
+      CacheNodeType: 'cache.t2.micro'
+      CacheSubnetGroupName: !Ref CacheSubnetGroup
+      Engine: redis
+      EngineVersion: '6.2'
+      NumCacheNodes: 1
+      VpcSecurityGroupIds:
+      - !Ref CacheSecurityGroup
+  CacheSubnetGroup:
+    Type: 'AWS::ElastiCache::SubnetGroup'
+    Properties:
+      Description: cache
+      SubnetIds:
+      - Ref: SubnetA
+      - Ref: SubnetB
+  ##########################################################################
+  #                                                                        #
+  #                                Database                                #
+  #                                                                        #
+  ##########################################################################
+  DatabaseSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: database
+      VpcId: !Ref VPC
+  DatabaseSecurityGroupIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref InstanceSecurityGroup
+  Database:
+    Type: 'AWS::RDS::DBInstance'
+    DeletionPolicy: Delete # For AWS::RDS::DBInstance resources that don't specify the DBClusterIdentifier property, the default policy is Snapshot which can cause unwanted costs. However, for production setups, we highly recommend to stay with the default to avoid data loss.
+    Properties:
+      AllocatedStorage: 5
+      BackupRetentionPeriod: 0
+      DBInstanceClass: 'db.t2.micro'
+      DBName: discourse
+      Engine: postgres
+      EngineVersion: '12.10'
+      MasterUsername: discourse
+      MasterUserPassword: discourse
+      VPCSecurityGroups:
+      - !Sub ${DatabaseSecurityGroup.GroupId}
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+    DependsOn: VPCGatewayAttachment
+  DatabaseSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: database
+      SubnetIds:
+      - Ref: SubnetA
+      - Ref: SubnetB
+  ##########################################################################
+  #                                                                        #
+  #                            IAM User                                    #
+  #                                                                        #
+  ##########################################################################
+  EmailUser:
+    Type: 'AWS::IAM::User'
+    Properties:
+      Policies:
+      - PolicyName: 'ses'
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: ses:SendRawEmail
+            Resource: "*"
+      UserName: !Ref AWS::StackName
+  EmailCredentials:
+    Type: 'AWS::IAM::AccessKey'
+    Properties:
+      UserName: !Ref EmailUser
+  ##########################################################################
+  #                                                                        #
+  #                            Virtual machine                             #
+  #                                                                        #
+  ##########################################################################
+  InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+      - !Ref InstanceRole
+  InstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: ssm
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            Resource: '*'
+  InstanceSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'vm'
+      SecurityGroupIngress:
+      - CidrIp: '0.0.0.0/0'
+        FromPort: 80
+        IpProtocol: tcp
+        ToPort: 80
+      VpcId: !Ref VPC
+  Instance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      InstanceType: 't2.micro'
+      IamInstanceProfile: !Ref InstanceProfile
+      NetworkInterfaces:
+      - AssociatePublicIpAddress: true
+        DeleteOnTermination: true
+        DeviceIndex: 0
+        GroupSet:
+        - !Ref InstanceSecurityGroup
+        SubnetId: !Ref SubnetA
+      BlockDeviceMappings:
+      - DeviceName: '/dev/xvda'
+        Ebs:
+          VolumeSize: 16
+          VolumeType: gp2
+      UserData:
+        'Fn::Base64': !Sub |
+          #!/bin/bash -x
+          bash -ex << "TRY"
+            # t2.micro may not have enough memory, so we add a 1024MB swapfile
+            dd if=/dev/zero of=/swapfile1 bs=1024 count=1048576
+            chmod 0600 /swapfile1
+            mkswap /swapfile1
+            swapon /swapfile1
+            echo "/swapfile1 none swap sw 0 0" >> /etc/fstab
+
+            # get public IP address of this EC2 instance
+            PUBLICIP="$(curl -s -m 60 http://169.254.169.254/latest/meta-data/public-ipv4)"
+          
+            cat << 'EOF' > smtp_credentials_generate.py
+          #!/usr/bin/env python3
+          
+          import hmac
+          import hashlib
+          import base64
+          import argparse
+          
+          SMTP_REGIONS = [
+            'us-east-2',     # US East (Ohio)
+            'us-east-1',     # US East (N. Virginia)
+            'us-west-2',     # US West (Oregon)
+            'ap-south-1',    # Asia Pacific (Mumbai)
+            'ap-northeast-2',  # Asia Pacific (Seoul)
+            'ap-southeast-1',  # Asia Pacific (Singapore)
+            'ap-southeast-2',  # Asia Pacific (Sydney)
+            'ap-northeast-1',  # Asia Pacific (Tokyo)
+            'ca-central-1',  # Canada (Central)
+            'eu-central-1',  # Europe (Frankfurt)
+            'eu-west-1',     # Europe (Ireland)
+            'eu-west-2',     # Europe (London)
+            'sa-east-1',     # South America (Sao Paulo)
+            'us-gov-west-1',   # AWS GovCloud (US)
+          ]
+          
+          # These values are required to calculate the signature. Do not change them.
+          DATE = "11111111"
+          SERVICE = "ses"
+          MESSAGE = "SendRawEmail"
+          TERMINAL = "aws4_request"
+          VERSION = 0x04
+          
+          def sign(key, msg):
+            return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
+          
+          def calculate_key(secret_access_key, region):
+            if region not in SMTP_REGIONS:
+              raise ValueError(f"The {region} Region doesn't have an SMTP endpoint.")
+          
+            signature = sign(("AWS4" + secret_access_key).encode('utf-8'), DATE)
+            signature = sign(signature, region)
+            signature = sign(signature, SERVICE)
+            signature = sign(signature, TERMINAL)
+            signature = sign(signature, MESSAGE)
+            signature_and_version = bytes([VERSION]) + signature
+            smtp_password = base64.b64encode(signature_and_version)
+            return smtp_password.decode('utf-8')
+          
+          def main():
+            parser = argparse.ArgumentParser(
+            description='Convert a Secret Access Key for an IAM user to an SMTP password.')
+            parser.add_argument(
+            'secret', help='The Secret Access Key to convert.')
+            parser.add_argument(
+            'region',
+            help='The AWS Region where the SMTP password will be used.',
+            choices=SMTP_REGIONS)
+            args = parser.parse_args()
+            print(calculate_key(args.secret, args.region))
+          
+          if __name__ == '__main__':
+            main()
+          EOF
+
+            SMPT_PASSWORD=$(python3 smtp_credentials_generate.py ${EmailCredentials.SecretAccessKey} us-east-1)
+
+            # install packages
+            yum install -y git
+            amazon-linux-extras install docker -y
+            systemctl start docker
+            docker run --restart always -d -p 80:80 --name discourse \
+              -e "UNICORN_WORKERS=3" \
+              -e "DISCOURSE_DB_PASSWORD=discourse" \
+              -e "DISCOURSE_DEFAULT_LOCALE=en" \
+              -e "DISCOURSE_DB_USERNAME=discourse" \
+              -e "DISCOURSE_REDIS_HOST=${Cache.RedisEndpoint.Address}" \
+              -e "RUBY_GC_HEAP_GROWTH_MAX_SLOTS=40000" \
+              -e "LC_ALL=en_US.UTF-8" \
+              -e "RUBY_GLOBAL_METHOD_CACHE_SIZE=131072" \
+              -e "EMBER_CLI_PROD_ASSETS=1" \
+              -e "DISCOURSE_HOSTNAME=$PUBLICIP" \
+              -e "DISCOURSE_SMTP_ADDRESS=email-smtp.us-east-1.amazonaws.com" \
+              -e "DISCOURSE_SMTP_PORT=587" \
+              -e "DISCOURSE_SMTP_USER_NAME=${EmailCredentials}" \
+              -e "DISCOURSE_SMTP_PASSWORD=$SMPT_PASSWORD" \
+              -e "DISCOURSE_SMTP_ENABLE_START_TLS=true" \
+              -e "DOCKER_HOST_IP=172.17.0.1" \
+              -e "LANG=en_US.UTF-8" \
+              -e "UNICORN_SIDEKIQS=1" \
+              -e "RUBY_GC_HEAP_OLDOBJECT_LIMIT_FACTOR=1.5" \
+              -e "DISCOURSE_DB_HOST=${Database.Endpoint.Address}" \
+              -e "LANGUAGE=en_US.UTF-8" \
+              -e "DISCOURSE_DEVELOPER_EMAILS=${AdminEmailAddress}" \
+              -e "DISCOURSE_NOTIFICATION_EMAIL=${AdminEmailAddress}" \
+              -e "RAILS_ENV=production" \
+              -e "RUBY_GC_HEAP_INIT_SLOTS=400000" \
+              -e "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+              -e "PG_MAJOR=13" \
+              -e "RUBY_ALLOCATOR=/usr/lib/libjemalloc.so.1" \
+              public.ecr.aws/awsinaction/discourse:3rd /sbin/boot
+            
+            docker exec discourse /bin/sh -c "cd /var/www/discourse && rake db:migrate"
+            docker restart discourse
+          TRY
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    DependsOn:
+    - VPCGatewayAttachment
+Outputs:
+  InstanceIPAddress:
+    Value: !GetAtt 'Instance.PublicIp'
+    Description: 'EC2 Instance public IP'
+  InstanceId:
+    Value: !Ref Instance
+    Description: 'EC2 Instance ID (connect via Session Manager)'
+
