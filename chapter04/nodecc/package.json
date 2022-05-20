@@ -1,11 +1,10 @@
 {
   "dependencies": {
-    "aws-sdk": "2.369.0",
-    "blessed": "0.1.81",
-    "jmespath": "0.15.0"
+    "aws-sdk": "2.1139.0",
+    "blessed": "0.1.81"
   },
   "devDependencies": {
-    "eslint": "5.9.0"
+    "eslint": "8.15.0"
   },
   "scripts": {
     "test": "eslint ."
