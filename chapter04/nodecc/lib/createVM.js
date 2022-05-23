@@ -5,10 +5,12 @@ const ec2 = new AWS.EC2({
 
 module.exports = (amiId, subnetId, cb) => {
   ec2.runInstances({
+    IamInstanceProfile: {
+      Name: 'ec2-ssm-core'
+    },
     ImageId: amiId,
     MinCount: 1,
     MaxCount: 1,
-    KeyName: 'mykey',
     InstanceType: 't2.micro',
     SubnetId: subnetId
   }, (err) => {

@@ -1,5 +1,7 @@
 const blessed = require('blessed');
 
+process.env.AWS_SDK_LOAD_CONFIG ='1';
+
 const screen = blessed.screen({
   autoPadding: true,
   smartCSR: true,
@@ -102,6 +104,7 @@ const open = (i) => {
                 content:
                   'InstanceId: ' + instance.InstanceId + '\n' +
                   'InstanceType: ' + instance.InstanceType + '\n' +
+                  'State: ' + instance.State.Name + '\n' +
                   'LaunchTime: ' + instance.LaunchTime + '\n' +
                   'ImageId: ' + instance.ImageId + '\n' +
                   'PublicDnsName: ' + instance.PublicDnsName
@@ -162,7 +165,7 @@ const open = (i) => {
                     const vmContent = blessed.box({  
                       fg: 'white',
                       bg: 'blue',
-                      content: 'starting ...'
+                      content: 'starting ...\n\nYou can always go back with the left arrow key.'
                     });
                     content.append(vmContent);
                   }
@@ -206,7 +209,7 @@ const open = (i) => {
               const vmContent = blessed.box({  
                 fg: 'white',
                 bg: 'blue',
-                content: 'terminating ...'
+                content: 'terminating ...\n\nYou can always go back with the left arrow key.'
               });
               content.append(vmContent);
             }
