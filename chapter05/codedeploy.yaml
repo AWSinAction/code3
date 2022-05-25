@@ -45,7 +45,7 @@ Resources:
       EnableDnsHostnames: true
   InternetGateway:
     Type: 'AWS::EC2::InternetGateway'
-    Properties: { }
+    Properties: {}
   VPCGatewayAttachment:
     Type: 'AWS::EC2::VPCGatewayAttachment'
     Properties:
@@ -54,13 +54,13 @@ Resources:
   SubnetA:
     Type: 'AWS::EC2::Subnet'
     Properties:
-      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: '172.31.38.0/24'
       VpcId: !Ref VPC
   SubnetB:
     Type: 'AWS::EC2::Subnet'
     Properties:
-      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: '172.31.37.0/24'
       VpcId: !Ref VPC
   RouteTable:
@@ -214,7 +214,7 @@ Resources:
             VolumeType: gp3
         IamInstanceProfile:
           Name: !Ref InstanceProfile
-        ImageId: !FindInMap [ RegionMap, !Ref 'AWS::Region', AMI ]
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         Monitoring:
           Enabled: false
         InstanceType: 't2.micro'
@@ -229,17 +229,17 @@ Resources:
           'Fn::Base64': !Sub |
             #!/bin/bash -ex
             trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}' ERR
-            
+
             # Install nodejs and git
             curl -fsSL https://rpm.nodesource.com/setup_14.x | bash -
             yum install -y nodejs git
-            
+
             # Install CodeDeploy agent
             yum install -y ruby wget
             wget https://aws-codedeploy-us-east-1.s3.us-east-1.amazonaws.com/latest/install
             chmod +x ./install
             ./install auto
-            
+
             /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
   AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
@@ -252,7 +252,7 @@ Resources:
       MinSize: 1
       MaxSize: 1
       HealthCheckGracePeriod: 300
-      HealthCheckType: EC2 #TODO Change to ELB
+      HealthCheckType: EC2 # TODO Change to ELB
       VPCZoneIdentifier:
       - !Ref SubnetA
       - !Ref SubnetB
@@ -269,7 +269,7 @@ Resources:
         WaitOnResourceSignals: true
   ArtifactBucket:
     Type: 'AWS::S3::Bucket'
-    Properties: { }
+    Properties: {}
   Application:
     Type: 'AWS::CodeDeploy::Application'
     Properties:

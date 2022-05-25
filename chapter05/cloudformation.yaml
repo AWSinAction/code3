@@ -126,18 +126,18 @@ Resources:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
       Subnets:
-        - Ref: SubnetA
-        - Ref: SubnetB
+      - !Ref SubnetA
+      - !Ref SubnetB
       SecurityGroups:
-        - !Ref LoadBalancerSecurityGroup
+      - !Ref LoadBalancerSecurityGroup
       Scheme: 'internet-facing'
     DependsOn: VPCGatewayAttachment
   LoadBalancerListener:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
     Properties:
       DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref LoadBalancerTargetGroup
+      - Type: forward
+        TargetGroupArn: !Ref LoadBalancerTargetGroup
       LoadBalancerArn: !Ref LoadBalancer
       Port: 80
       Protocol: HTTP
@@ -146,7 +146,7 @@ Resources:
     Properties:
       HealthCheckIntervalSeconds: 5
       HealthCheckPath: '/'
-      HealthCheckPort: 9001
+      HealthCheckPort: '9001'
       HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 3
       HealthyThresholdCount: 2
@@ -162,55 +162,55 @@ Resources:
       GroupDescription: 'awsinaction-elb-sg'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - CidrIp: '0.0.0.0/0'
-          FromPort: 80
-          IpProtocol: tcp
-          ToPort: 80
+      - CidrIp: '0.0.0.0/0'
+        FromPort: 80
+        IpProtocol: tcp
+        ToPort: 80
   WebServerSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: 'awsinaction-sg'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - FromPort: 9001
-          IpProtocol: tcp
-          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
-          ToPort: 9001
+      - FromPort: 9001
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+        ToPort: 9001
   InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
       Roles:
-        - !Ref InstanceRole
+      - !Ref InstanceRole
   InstanceRole:
     Type: 'AWS::IAM::Role'
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Effect: Allow
-            Principal:
-              Service: 'ec2.amazonaws.com'
-            Action: 'sts:AssumeRole'
+        - Effect: Allow
+          Principal:
+            Service: 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
       Policies:
-        - PolicyName: ssm
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
-                  - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
-                  - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
-                Resource: '*'
+      - PolicyName: ssm
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            Resource: '*'
   LaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
       LaunchTemplateData:
         BlockDeviceMappings:
-          - DeviceName: '/dev/xvda'
-            Ebs:
-              Encrypted: true
-              VolumeType: gp3
+        - DeviceName: '/dev/xvda'
+          Ebs:
+            Encrypted: true
+            VolumeType: gp3
         IamInstanceProfile:
           Name: !Ref InstanceProfile
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
@@ -220,19 +220,19 @@ Resources:
         MetadataOptions:
           HttpTokens: required
         NetworkInterfaces:
-          - AssociatePublicIpAddress: true
-            DeviceIndex: 0
-            Groups:
-              - !Ref WebServerSecurityGroup
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          Groups:
+          - !Ref WebServerSecurityGroup
         UserData:
           'Fn::Base64': !Sub |
             #!/bin/bash -ex
             trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}' ERR
-            
+
             # Install nodejs and git
             curl -fsSL https://rpm.nodesource.com/setup_14.x | bash -
             yum install -y nodejs git
-            
+
             # Fetch, configure, and start Etherpad as non-root user
             su ec2-user -c '
             cd /home/ec2-user/
@@ -241,27 +241,27 @@ Resources:
             cp settings.json.template settings.json
             sed -i "s/\"exposeVersion\": false/\"exposeVersion\": true/" settings.json
             ./src/bin/run.sh &'
-            
+
             /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
   AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
       TargetGroupARNs:
-        - !Ref LoadBalancerTargetGroup
+      - !Ref LoadBalancerTargetGroup
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
-      MinSize: 1
-      MaxSize: 1
+      MinSize: '1'
+      MaxSize: '1'
       HealthCheckGracePeriod: 300
-      HealthCheckType: EC2 #TODO Change to ELB
+      HealthCheckType: EC2 # TODO Change to ELB
       VPCZoneIdentifier:
-        - !Ref SubnetA
-        - !Ref SubnetB
+      - !Ref SubnetA
+      - !Ref SubnetB
       Tags:
-        - PropagateAtLaunch: true
-          Value: etherpad
-          Key: Name
+      - PropagateAtLaunch: true
+        Value: etherpad
+        Key: Name
     CreationPolicy:
       ResourceSignal:
         Timeout: PT10M
