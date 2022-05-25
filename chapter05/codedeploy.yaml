@@ -1,12 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AWS in Action: chapter 17 (Wordpress)'
-Parameters:
-  WordpressAdminPassword:
-    Description: 'The password for the Wordpress administrator.'
-    Type: String
-    AllowedPattern: '[A-Za-z0-9]{8,30}'
-    ConstraintDescription: 'WordpressAdminPassword must match [A-Za-z0-9]{8,30}'
+Description: 'AWS in Action: chapter 5 (Deploying Etherpad with CodeDeploy)'
 Mappings:
   RegionMap:
     'eu-north-1':
@@ -51,7 +45,7 @@ Resources:
       EnableDnsHostnames: true
   InternetGateway:
     Type: 'AWS::EC2::InternetGateway'
-    Properties: {}
+    Properties: { }
   VPCGatewayAttachment:
     Type: 'AWS::EC2::VPCGatewayAttachment'
     Properties:
@@ -60,13 +54,13 @@ Resources:
   SubnetA:
     Type: 'AWS::EC2::Subnet'
     Properties:
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
       CidrBlock: '172.31.38.0/24'
       VpcId: !Ref VPC
   SubnetB:
     Type: 'AWS::EC2::Subnet'
     Properties:
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
       CidrBlock: '172.31.37.0/24'
       VpcId: !Ref VPC
   RouteTable:
@@ -126,18 +120,18 @@ Resources:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
       Subnets:
-        - Ref: SubnetA
-        - Ref: SubnetB
+      - Ref: SubnetA
+      - Ref: SubnetB
       SecurityGroups:
-        - !Ref LoadBalancerSecurityGroup
+      - !Ref LoadBalancerSecurityGroup
       Scheme: 'internet-facing'
     DependsOn: VPCGatewayAttachment
   LoadBalancerListener:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
     Properties:
       DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref LoadBalancerTargetGroup
+      - Type: forward
+        TargetGroupArn: !Ref LoadBalancerTargetGroup
       LoadBalancerArn: !Ref LoadBalancer
       Port: 80
       Protocol: HTTP
@@ -146,272 +140,126 @@ Resources:
     Properties:
       HealthCheckIntervalSeconds: 5
       HealthCheckPath: '/'
-      HealthCheckPort: 80
+      HealthCheckPort: 9001
       HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 3
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
       Matcher:
         HttpCode: '200,302'
-      Port: 80
+      Port: 9001
       Protocol: HTTP
       VpcId: !Ref VPC
+      TargetGroupAttributes:
+      - Key: 'deregistration_delay.timeout_seconds'
+        Value: 10
   LoadBalancerSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: 'awsinaction-elb-sg'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - CidrIp: '0.0.0.0/0'
-          FromPort: 80
-          IpProtocol: tcp
-          ToPort: 80
+      - CidrIp: '0.0.0.0/0'
+        FromPort: 80
+        IpProtocol: tcp
+        ToPort: 80
   WebServerSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: 'awsinaction-sg'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - FromPort: 80
-          IpProtocol: tcp
-          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
-          ToPort: 80
-  DatabaseSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupDescription: 'awsinaction-db-sg'
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref WebServerSecurityGroup
-  Database:
-    Type: 'AWS::RDS::DBInstance'
-    DeletionPolicy: Delete # For AWS::RDS::DBInstance resources that don't specify the DBClusterIdentifier property, the default policy is Snapshot which can cause unwanted costs. However, for production setups, we highly recommend to stay with the default to avoid data loss.
-    Properties:
-      AllocatedStorage: 5
-      BackupRetentionPeriod: 0
-      DBInstanceClass: 'db.t2.micro'
-      DBName: wordpress
-      Engine: MySQL
-      MasterUsername: wordpress
-      MasterUserPassword: wordpress
-      VPCSecurityGroups:
-        - !Sub ${DatabaseSecurityGroup.GroupId}
-      DBSubnetGroupName: !Ref DBSubnetGroup
-    DependsOn: VPCGatewayAttachment
-  DBSubnetGroup:
-    Type: 'AWS::RDS::DBSubnetGroup'
-    Properties:
-      DBSubnetGroupDescription: DB subnet group
-      SubnetIds:
-        - Ref: SubnetA
-        - Ref: SubnetB
-  EFSFileSystem:
-    Type: 'AWS::EFS::FileSystem'
-    Properties:
-      FileSystemTags:
-        - Key: Name
-          Value: 'wordpress-efs'
-  EFSMountTargetA:
-    Type: 'AWS::EFS::MountTarget'
-    Properties:
-      FileSystemId: !Ref EFSFileSystem
-      SubnetId: !Ref SubnetA
-      SecurityGroups:
-        - !Ref EFSSecurityGroup
-  EFSMountTargetB:
-    Type: 'AWS::EFS::MountTarget'
-    Properties:
-      FileSystemId: !Ref EFSFileSystem
-      SubnetId: !Ref SubnetB
-      SecurityGroups:
-        - !Ref EFSSecurityGroup
-  EFSSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupDescription: 'Allowing access to EFS'
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 2049
-          ToPort: 2049
-          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      - FromPort: 9001
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+        ToPort: 9001
   InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
       Roles:
-        - !Ref InstanceRole
+      - !Ref InstanceRole
   InstanceRole:
     Type: 'AWS::IAM::Role'
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Effect: Allow
-            Principal:
-              Service: 'ec2.amazonaws.com'
-            Action: 'sts:AssumeRole'
+        - Effect: Allow
+          Principal:
+            Service: 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
       Policies:
-        - PolicyName: ssm
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
-                  - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
-                  - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
-                Resource: '*'
+      - PolicyName: ssm
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            Resource: '*'
+          - Effect: Allow
+            Action:
+            - 's3:GetObject*'
+            Resource: !Sub '${ArtifactBucket.Arn}/*'
   LaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
-    Metadata:
-      'AWS::CloudFormation::Init':
-        configSets:
-          default: [mount, extras, config]
-        mount:
-          packages:
-            yum:
-              'amazon-efs-utils': []
-          commands:
-            'a_mount':
-              command: !Sub 'mkdir /var/www && echo "${EFSFileSystem}:/ /var/www efs tls,_netdev 0 0" >> /etc/fstab && while ! (echo > /dev/tcp/${EFSFileSystem}.efs.${AWS::Region}.amazonaws.com/2049) >/dev/null 2>&1; do sleep 5; done && mount -a -t efs'
-              test: '[ ! -d /var/www ]'
-        extras:
-          commands:
-            'a_enable_php':
-              command: 'amazon-linux-extras enable php7.4 && yum -y clean metadata'
-              test: "! grep -Fxq '[amzn2extra-php7.4]' /etc/yum.repos.d/amzn2-extras.repo"
-        config:
-          packages:
-            yum:
-              php: []
-              php-gd: []
-              php-opcache: []
-              php-mysqlnd: []
-              php-mbstring: []
-              php-xmlrpc: []
-              mariadb: []
-              httpd: []
-          files:
-            '/root/php.sh':
-              content: |
-                #!/bin/bash -ex
-                sed -i 's/max_execution_time = 30/max_execution_time = 300/' /etc/php.ini
-                sed -i 's/max_input_time = 60/max_input_time = 300/' /etc/php.ini
-                sed -i 's/; max_input_vars = 1000/max_input_vars = 10000/' /etc/php.ini
-                sed -i 's/memory_limit = 128M/memory_limit = 512M/' /etc/php.ini
-                sed -i 's/post_max_size = 8M/post_max_size = 200M/' /etc/php.ini
-                sed -i 's/upload_max_filesize = 2M/upload_max_filesize = 200M/' /etc/php.ini
-                sed -i 's/max_file_uploads = 20/max_file_uploads = 200/' /etc/php.ini
-
-                sed -i 's/opcache.memory_consumption=128/opcache.memory_consumption=256/g' /etc/php.d/10-opcache.ini
-                sed -i 's/opcache.interned_strings_buffer=8/opcache.interned_strings_buffer=16/g' /etc/php.d/10-opcache.ini
-                sed -i 's/opcache.max_accelerated_files=4000/opcache.max_accelerated_files=10000/g' /etc/php.d/10-opcache.ini
-                sed -i 's/;opcache.max_wasted_percentage=5/opcache.max_wasted_percentage=10/g' /etc/php.d/10-opcache.ini
-                sed -i 's/;opcache.validate_timestamps=1/opcache.validate_timestamps=1/g' /etc/php.d/10-opcache.ini
-                sed -i 's/;opcache.revalidate_freq=2/opcache.revalidate_freq=60/g' /etc/php.d/10-opcache.ini
-                sed -i 's/;opcache.fast_shutdown=0/opcache.fast_shutdown=0/g' /etc/php.d/10-opcache.ini
-              mode: '000500'
-              owner: root
-              group: root
-            '/etc/httpd/conf.d/wordpress.conf':
-              content: |
-                <Directory "/var/www/html">
-                Options Indexes FollowSymLinks
-                AllowOverride All
-                Require all granted
-                </Directory>
-              mode: '000500'
-              owner: root
-              group: root
-            '/root/wordpress.sh':
-              content: !Sub
-                - |
-                  #!/bin/bash -ex
-                  # ensure than only one machine installs wp
-                  if mkdir /var/www/lock; then
-                    cd /var/www/html
-                    wget --quiet --timeout=60 --output-document=wp-cli.phar https://github.com/wp-cli/wp-cli/releases/download/v2.5.0/wp-cli-2.5.0.phar
-                    if ! php wp-cli.phar core is-installed --allow-root; then
-                      php wp-cli.phar core download --allow-root --version=5.8.2
-                      php wp-cli.phar core config --dbname='wordpress' --dbuser='wordpress' --dbpass='wordpress' --dbhost='${DBHost}' --allow-root
-                      php wp-cli.phar core install --url='http://${DomainName}' --title='AWS in Action' --admin_user='admin' --admin_password='${WordpressAdminPassword}' --admin_email='test@example.com' --skip-email --allow-root
-                    fi
-                    chown -R apache:apache /var/www/html
-                    chmod u+wrx /var/www/html/wp-content/*
-                    rm -f wp-cli.phar
-                  fi
-                - WordpressAdminPassword: !Ref WordpressAdminPassword
-                  DBHost: !GetAtt 'Database.Endpoint.Address'
-                  DomainName: !GetAtt 'LoadBalancer.DNSName'
-              mode: '000500'
-              owner: root
-              group: root
-          commands:
-            01_php:
-              command: '/root/php.sh'
-              cwd: '/var/www/html'
-            02_wordpress:
-              command: '/root/wordpress.sh'
-              cwd: '/var/www/html'
-          services:
-            sysvinit:
-              httpd:
-                enabled: true
-                ensureRunning: true
-              amazon-ssm-agent:
-                enabled: true
-                ensureRunning: true
     Properties:
       LaunchTemplateData:
         BlockDeviceMappings:
-          - DeviceName: '/dev/xvda'
-            Ebs:
-              Encrypted: true
-              VolumeType: gp3
+        - DeviceName: '/dev/xvda'
+          Ebs:
+            Encrypted: true
+            VolumeType: gp3
         IamInstanceProfile:
           Name: !Ref InstanceProfile
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        ImageId: !FindInMap [ RegionMap, !Ref 'AWS::Region', AMI ]
         Monitoring:
           Enabled: false
         InstanceType: 't2.micro'
         MetadataOptions:
           HttpTokens: required
         NetworkInterfaces:
-          - AssociatePublicIpAddress: true
-            DeviceIndex: 0
-            Groups:
-              - !Ref WebServerSecurityGroup
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          Groups:
+          - !Ref WebServerSecurityGroup
         UserData:
           'Fn::Base64': !Sub |
             #!/bin/bash -ex
             trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}' ERR
-            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchTemplate --region ${AWS::Region}
+            
+            # Install nodejs and git
+            curl -fsSL https://rpm.nodesource.com/setup_14.x | bash -
+            yum install -y nodejs git
+            
+            # Install CodeDeploy agent
+            yum install -y ruby wget
+            wget https://aws-codedeploy-us-east-1.s3.us-east-1.amazonaws.com/latest/install
+            chmod +x ./install
+            ./install auto
+            
             /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
   AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
-    DependsOn:
-      - EFSMountTargetA
-      - EFSMountTargetB
     Properties:
       TargetGroupARNs:
-        - !Ref LoadBalancerTargetGroup
+      - !Ref LoadBalancerTargetGroup
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
-      MinSize: 2
-      MaxSize: 4
+      MinSize: 1
+      MaxSize: 1
       HealthCheckGracePeriod: 300
-      HealthCheckType: ELB
+      HealthCheckType: EC2 #TODO Change to ELB
       VPCZoneIdentifier:
-        - !Ref SubnetA
-        - !Ref SubnetB
+      - !Ref SubnetA
+      - !Ref SubnetB
       Tags:
-        - PropagateAtLaunch: true
-          Value: wordpress
-          Key: Name
+      - PropagateAtLaunch: true
+        Value: etherpad
+        Key: Name
     CreationPolicy:
       ResourceSignal:
         Timeout: PT10M
@@ -419,17 +267,43 @@ Resources:
       AutoScalingRollingUpdate:
         PauseTime: PT10M
         WaitOnResourceSignals: true
-  ScalingPolicy:
-    Type: 'AWS::AutoScaling::ScalingPolicy'
+  ArtifactBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties: { }
+  Application:
+    Type: 'AWS::CodeDeploy::Application'
     Properties:
-      AutoScalingGroupName: !Ref AutoScalingGroup
-      PolicyType: TargetTrackingScaling
-      TargetTrackingConfiguration:
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ASGAverageCPUUtilization
-        TargetValue: 70
-      EstimatedInstanceWarmup: 60
+      ComputePlatform: 'Server'
+  DeploymentGroup:
+    Type: 'AWS::CodeDeploy::DeploymentGroup'
+    Properties:
+      ApplicationName: !Ref Application
+      AutoScalingGroups:
+      - !Ref AutoScalingGroup
+      DeploymentConfigName: 'CodeDeployDefault.AllAtOnce'
+      LoadBalancerInfo:
+        TargetGroupInfoList:
+        - Name: !GetAtt LoadBalancerTargetGroup.TargetGroupName
+      ServiceRoleArn: !GetAtt CodeDeployRole.Arn
+  CodeDeployRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'codedeploy.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+      - 'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole'
 Outputs:
   URL:
     Value: !Sub 'http://${LoadBalancer.DNSName}'
-    Description: 'Wordpress URL'
+    Description: 'Etherpad URL'
+  ArtifactBucket:
+    Value: !Ref ArtifactBucket
+    Description: 'Name of the artifact bucket'
+  Application:
+    Value: !Ref Application
+    Description: 'Name of the CodeDeploy application'
