@@ -236,7 +236,7 @@ Resources:
             # Fetch, configure, and start Etherpad as non-root user
             su ec2-user -c '
             cd /home/ec2-user/
-            git clone --depth 1 --branch ${EtherpadVersion} https://github.com/ether/etherpad-lite.git
+            git clone --depth 1 --branch ${EtherpadVersion} https://github.com/AWSinAction/etherpad-lite.git
             cd etherpad-lite/
             cp settings.json.template settings.json
             sed -i "s/\"exposeVersion\": false/\"exposeVersion\": true/" settings.json
@@ -254,7 +254,7 @@ Resources:
       MinSize: '1'
       MaxSize: '1'
       HealthCheckGracePeriod: 300
-      HealthCheckType: EC2 # TODO Change to ELB
+      HealthCheckType: ELB
       VPCZoneIdentifier:
       - !Ref SubnetA
       - !Ref SubnetB

@@ -63,7 +63,7 @@ build {
       "sudo mkdir /opt/etherpad-lite",
       "sudo chown -R ec2-user:ec2-user /opt/etherpad-lite",
       "cd /opt",
-      "git clone --depth 1 --branch 1.8.18 https://github.com/ether/etherpad-lite.git",
+      "git clone --depth 1 --branch 1.8.18 https://github.com/AWSinAction/etherpad-lite.git",
       "cd etherpad-lite",
       "cp settings.json.template settings.json",
       "sed -i \"s/\\\"exposeVersion\\\": false/\\\"exposeVersion\\\": true/\" settings.json",

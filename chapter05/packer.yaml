@@ -203,7 +203,7 @@ Resources:
       MinSize: 1
       MaxSize: 1
       HealthCheckGracePeriod: 300
-      HealthCheckType: EC2 # TODO Change to ELB
+      HealthCheckType: ELB
       VPCZoneIdentifier:
       - !Ref SubnetA
       - !Ref SubnetB
