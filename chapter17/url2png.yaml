@@ -202,11 +202,11 @@ Resources:
             yum --enablerepo=nodesource install -y nodejs
             yum install -y libfonts chromium
             wget -q -T 60 https://github.com/AWSinAction/code3/archive/refs/heads/main.zip
-            unzip ch17.zip
-            cd code3-ch17/chapter15/url2png/
+            unzip main.zip
+            cd code3-main/chapter15/url2png/
             npm install
             echo "{\"QueueUrl\": \"${SQSQueue}\", \"Bucket\": \"ch17-url2png-${AWS::AccountId}\"}" > config.json
-            sudo -u ec2-user node worker.js
+            sudo -u ec2-user AWS_REGION=${AWS::Region} node worker.js
   AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
