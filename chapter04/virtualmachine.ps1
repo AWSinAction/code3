@@ -16,6 +16,7 @@ Write-Host "waiting for $INSTANCEID ..."
 aws ec2 wait instance-running --instance-ids $INSTANCEID
 Write-Host "$INSTANCEID is is up and running"
 Write-Host "connect to the instance using Session Manager"
+Write-Host "https://console.aws.amazon.com/systems-manager/session-manager/$INSTANCEID"
 Write-Host "Press [Enter] key to terminate $INSTANCEID ..."
 Read-Host
 aws ec2 terminate-instances --instance-ids $INSTANCEID

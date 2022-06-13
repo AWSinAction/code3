@@ -8,6 +8,7 @@ echo "waiting for $INSTANCEID ..."
 aws ec2 wait instance-running --instance-ids "$INSTANCEID"
 echo "$INSTANCEID is up and running"
 echo "connect to the instance using Session Manager"
+echo "https://console.aws.amazon.com/systems-manager/session-manager/$INSTANCEID"
 read -r -p "Press [Enter] key to terminate $INSTANCEID ..."
 aws ec2 terminate-instances --instance-ids "$INSTANCEID" > /dev/null
 echo "terminating $INSTANCEID ..."
