@@ -13,14 +13,10 @@ Mappings:
       AMI: 'ami-05bc2576a72f22c39'
     'ap-south-1':
       AMI: 'ami-0002bdad91f793433'
-    'eu-west-3':
-      AMI: 'ami-0c73cd1c5347436f3'
     'eu-west-2':
       AMI: 'ami-029ed17b4ea379178'
     'eu-west-1':
       AMI: 'ami-04632f3cef5083854'
-    'ap-northeast-3':
-      AMI: 'ami-0ae88850834d2c589'
     'ap-northeast-2':
       AMI: 'ami-0263588f2531a56bd'
     'ap-northeast-1':
@@ -238,8 +234,20 @@ Resources:
             cd /home/ec2-user/
             git clone --depth 1 --branch ${EtherpadVersion} https://github.com/AWSinAction/etherpad-lite.git
             cd etherpad-lite/
-            cp settings.json.template settings.json
-            sed -i "s/\"exposeVersion\": false/\"exposeVersion\": true/" settings.json
+            echo "
+            {
+              \"title\": \"Etherpad\",
+              \"dbType\": \"mysql\",
+              \"dbSettings\": {
+                \"host\": \"${Database.Endpoint.Address}\",
+                \"port\": \"3306\",
+                \"database\": \"etherpad\",
+                \"user\": \"etherpad\",
+                \"password\": \"etherpad\"
+              },
+              \"exposeVersion\": true
+            }
+            " > settings.json
             ./src/bin/run.sh &'
 
             /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
@@ -252,7 +260,7 @@ Resources:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
       MinSize: '1'
-      MaxSize: '1'
+      MaxSize: '2'
       HealthCheckGracePeriod: 300
       HealthCheckType: ELB
       VPCZoneIdentifier:
@@ -269,6 +277,39 @@ Resources:
       AutoScalingRollingUpdate:
         PauseTime: PT10M
         WaitOnResourceSignals: true
+        MinInstancesInService: 1
+  DatabaseSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'awsinaction-db-sg'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+        SourceSecurityGroupId: !Ref WebServerSecurityGroup
+  Database:
+    Type: 'AWS::RDS::DBInstance'
+    DeletionPolicy: Delete # For AWS::RDS::DBInstance resources that don't specify the DBClusterIdentifier property, the default policy is Snapshot which can cause unwanted costs. However, for production setups, we highly recommend to stay with the default to avoid data loss.
+    Properties:
+      AllocatedStorage: 5
+      BackupRetentionPeriod: 0
+      DBInstanceClass: 'db.t2.micro'
+      DBName: etherpad
+      Engine: MySQL
+      MasterUsername: etherpad
+      MasterUserPassword: etherpad
+      VPCSecurityGroups:
+      - !Sub ${DatabaseSecurityGroup.GroupId}
+      DBSubnetGroupName: !Ref DBSubnetGroup
+    DependsOn: VPCGatewayAttachment
+  DBSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: DB subnet group
+      SubnetIds:
+      - Ref: SubnetA
+      - Ref: SubnetB
 Outputs:
   URL:
     Value: !Sub 'http://${LoadBalancer.DNSName}'

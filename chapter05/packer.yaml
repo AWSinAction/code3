@@ -190,6 +190,21 @@ Resources:
           'Fn::Base64': !Sub |
             #!/bin/bash -ex
             trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}' ERR
+            cd /opt/etherpad-lite/
+            echo "
+            {
+              \"title\": \"Etherpad\",
+              \"dbType\": \"mysql\",
+              \"dbSettings\": {
+                \"host\": \"${Database.Endpoint.Address}\",
+                \"port\": \"3306\",
+                \"database\": \"etherpad\",
+                \"user\": \"etherpad\",
+                \"password\": \"etherpad\"
+              },
+              \"exposeVersion\": true
+            }
+            " > settings.json
             /opt/etherpad-lite/src/bin/fastRun.sh &
             /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
   AutoScalingGroup:
@@ -201,7 +216,7 @@ Resources:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
       MinSize: 1
-      MaxSize: 1
+      MaxSize: 2
       HealthCheckGracePeriod: 300
       HealthCheckType: ELB
       VPCZoneIdentifier:
@@ -218,6 +233,39 @@ Resources:
       AutoScalingRollingUpdate:
         PauseTime: PT10M
         WaitOnResourceSignals: true
+        MinInstancesInService: 1
+  DatabaseSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'awsinaction-db-sg'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+        SourceSecurityGroupId: !Ref WebServerSecurityGroup
+  Database:
+    Type: 'AWS::RDS::DBInstance'
+    DeletionPolicy: Delete # For AWS::RDS::DBInstance resources that don't specify the DBClusterIdentifier property, the default policy is Snapshot which can cause unwanted costs. However, for production setups, we highly recommend to stay with the default to avoid data loss.
+    Properties:
+      AllocatedStorage: 5
+      BackupRetentionPeriod: 0
+      DBInstanceClass: 'db.t2.micro'
+      DBName: etherpad
+      Engine: MySQL
+      MasterUsername: etherpad
+      MasterUserPassword: etherpad
+      VPCSecurityGroups:
+      - !Sub ${DatabaseSecurityGroup.GroupId}
+      DBSubnetGroupName: !Ref DBSubnetGroup
+    DependsOn: VPCGatewayAttachment
+  DBSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: DB subnet group
+      SubnetIds:
+      - Ref: SubnetA
+      - Ref: SubnetB
 Outputs:
   URL:
     Value: !Sub 'http://${LoadBalancer.DNSName}'
