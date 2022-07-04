@@ -203,6 +203,10 @@ Resources:
             Action:
             - 's3:GetObject*'
             Resource: !Sub '${ArtifactBucket.Arn}/*'
+          - Effect: Allow
+            Action:
+            - 'ssm:GetParameter'
+            Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/etherpad-codedeploy/database_host'
   LaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
@@ -267,17 +271,51 @@ Resources:
       AutoScalingRollingUpdate:
         PauseTime: PT10M
         WaitOnResourceSignals: true
+  DatabaseSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'awsinaction-db-sg'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+        SourceSecurityGroupId: !Ref WebServerSecurityGroup
+  Database:
+    Type: 'AWS::RDS::DBInstance'
+    DeletionPolicy: Delete # For AWS::RDS::DBInstance resources that don't specify the DBClusterIdentifier property, the default policy is Snapshot which can cause unwanted costs. However, for production setups, we highly recommend to stay with the default to avoid data loss.
+    Properties:
+      AllocatedStorage: 5
+      BackupRetentionPeriod: 0
+      DBInstanceClass: 'db.t2.micro'
+      DBName: etherpad
+      Engine: MySQL
+      MasterUsername: etherpad
+      MasterUserPassword: etherpad
+      VPCSecurityGroups:
+      - !Sub ${DatabaseSecurityGroup.GroupId}
+      DBSubnetGroupName: !Ref DBSubnetGroup
+    DependsOn: VPCGatewayAttachment
+  DBSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: DB subnet group
+      SubnetIds:
+      - Ref: SubnetA
+      - Ref: SubnetB
   ArtifactBucket:
     Type: 'AWS::S3::Bucket'
     Properties: {}
   Application:
     Type: 'AWS::CodeDeploy::Application'
     Properties:
+      ApplicationName: 'etherpad-codedeploy'
       ComputePlatform: 'Server'
   DeploymentGroup:
     Type: 'AWS::CodeDeploy::DeploymentGroup'
     Properties:
       ApplicationName: !Ref Application
+      DeploymentGroupName: 'etherpad-codedeploy'
       AutoScalingGroups:
       - !Ref AutoScalingGroup
       DeploymentConfigName: 'CodeDeployDefault.AllAtOnce'
@@ -297,13 +335,16 @@ Resources:
           Action: 'sts:AssumeRole'
       ManagedPolicyArns:
       - 'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole'
+  DatabaseHostParameter:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: '/etherpad-codedeploy/database_host'
+      Type: 'String'
+      Value: !GetAtt 'Database.Endpoint.Address'
 Outputs:
   URL:
     Value: !Sub 'http://${LoadBalancer.DNSName}'
-    Description: 'Etherpad URL'
+    Description: 'The URL of the Etherpad application'
   ArtifactBucket:
     Value: !Ref ArtifactBucket
     Description: 'Name of the artifact bucket'
-  Application:
-    Value: !Ref Application
-    Description: 'Name of the CodeDeploy application'

@@ -26,7 +26,7 @@ source "amazon-ebs" "etherpad" {
   ssh_username         = "ec2-user"
   ssh_interface        = "session_manager"
   communicator         = "ssh"
-  iam_instance_profile = "ec2-sessionmanager"
+  iam_instance_profile = "ec2-ssm-core"
   ami_groups = ["all"]
   ami_regions = ["us-east-1"]
 }
@@ -44,7 +44,7 @@ build {
       "sudo mkdir /opt/etherpad-lite",
       "sudo chown -R ec2-user:ec2-user /opt/etherpad-lite",
       "cd /opt",
-      "git clone --depth 1 --branch 1.8.18 https://github.com/AWSinAction/etherpad-lite.git",
+      "git clone --depth 1 --branch 1.8.17 https://github.com/AWSinAction/etherpad-lite.git",
       "cd etherpad-lite",
       "./src/bin/installDeps.sh",
     ]
