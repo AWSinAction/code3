@@ -1,0 +1,95 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS in Action: chapter 6 (yum update)'
+Parameters:
+  VPC:
+    Description: 'Select the one and only default VPC'
+    Type: 'AWS::EC2::VPC::Id'
+  Subnet:
+    Description: 'Select one of the available subnets'
+    Type: 'AWS::EC2::Subnet::Id'
+Mappings:
+  RegionMap:
+    'eu-north-1':
+      AMI: 'ami-05bc2576a72f22c39'
+    'ap-south-1':
+      AMI: 'ami-0002bdad91f793433'
+    'eu-west-3':
+      AMI: 'ami-0c73cd1c5347436f3'
+    'eu-west-2':
+      AMI: 'ami-029ed17b4ea379178'
+    'eu-west-1':
+      AMI: 'ami-04632f3cef5083854'
+    'ap-northeast-3':
+      AMI: 'ami-0ae88850834d2c589'
+    'ap-northeast-2':
+      AMI: 'ami-0263588f2531a56bd'
+    'ap-northeast-1':
+      AMI: 'ami-0abaa5b0faf689830'
+    'sa-east-1':
+      AMI: 'ami-053a035b046dbb704'
+    'ca-central-1':
+      AMI: 'ami-0173297cea9ba27b0'
+    'ap-southeast-1':
+      AMI: 'ami-0d1d4b8d5a0cd293f'
+    'ap-southeast-2':
+      AMI: 'ami-0f4484f62c4fd8767'
+    'eu-central-1':
+      AMI: 'ami-099ccc441b2ef41ec'
+    'us-east-1':
+      AMI: 'ami-061ac2e015473fbe2'
+    'us-east-2':
+      AMI: 'ami-056b1936002ca8ede'
+    'us-west-1':
+      AMI: 'ami-028f2b5ee08012131'
+    'us-west-2':
+      AMI: 'ami-0e21d4d9303512b8e'
+Resources:
+  SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: !Ref 'AWS::StackName'
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: 'AWS in Action: chapter 6 (yum update)'
+  InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+      - !Ref Role
+  Role:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - 'ec2.amazonaws.com'
+          Action:
+          - 'sts:AssumeRole'
+      ManagedPolicyArns:
+      - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+  Instance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      IamInstanceProfile: !Ref InstanceProfile
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      InstanceType: 't2.micro'
+      SecurityGroupIds:
+      - !Ref SecurityGroup
+      SubnetId: !Ref Subnet
+      Tags:
+      - Key: Name
+        Value: 'AWS in Action: chapter 6 (yum update)'
+      UserData:
+        'Fn::Base64': !Sub |
+          #!/bin/bash -ex
+          trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}' ERR
+          yum -y update
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
