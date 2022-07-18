@@ -53,7 +53,7 @@ Resources:
   SecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: 'My security group'
+      GroupDescription: !Ref 'AWS::StackName'
       VpcId: !Ref VPC
   InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'

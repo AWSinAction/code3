@@ -2,127 +2,209 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AWS in Action: chapter 6 (firewall 5)'
 Parameters:
-  KeyName:
-    Description: 'Key Pair name'
-    Type: 'AWS::EC2::KeyPair::KeyName'
-    Default: mykey
   VPC:
-    Description: 'Just select the one and only default VPC'
+    Description: 'Select the one and only default VPC'
     Type: 'AWS::EC2::VPC::Id'
   Subnet:
-    Description: 'Just select one of the available subnets'
+    Description: 'Select one of the available subnets'
     Type: 'AWS::EC2::Subnet::Id'
-  IpForSSH:
-    Description: 'Your public IP address to allow SSH access'
-    Type: String
-    AllowedPattern: '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'
-    ConstraintDescription: 'Enter a valid IPv4 address'
 Mappings:
   RegionMap:
+    'eu-north-1':
+      AMI: 'ami-05bc2576a72f22c39'
     'ap-south-1':
-      AMI: 'ami-2ed19c41'
+      AMI: 'ami-0002bdad91f793433'
     'eu-west-3':
-      AMI: 'ami-c8a017b5'
+      AMI: 'ami-0c73cd1c5347436f3'
     'eu-west-2':
-      AMI: 'ami-e3051987'
+      AMI: 'ami-029ed17b4ea379178'
     'eu-west-1':
-      AMI: 'ami-760aaa0f'
+      AMI: 'ami-04632f3cef5083854'
+    'ap-northeast-3':
+      AMI: 'ami-0ae88850834d2c589'
     'ap-northeast-2':
-      AMI: 'ami-fc862292'
+      AMI: 'ami-0263588f2531a56bd'
     'ap-northeast-1':
-      AMI: 'ami-2803ac4e'
+      AMI: 'ami-0abaa5b0faf689830'
     'sa-east-1':
-      AMI: 'ami-1678037a'
+      AMI: 'ami-053a035b046dbb704'
     'ca-central-1':
-      AMI: 'ami-ef3b838b'
+      AMI: 'ami-0173297cea9ba27b0'
     'ap-southeast-1':
-      AMI: 'ami-dd7935be'
+      AMI: 'ami-0d1d4b8d5a0cd293f'
     'ap-southeast-2':
-      AMI: 'ami-1a668878'
+      AMI: 'ami-0f4484f62c4fd8767'
     'eu-central-1':
-      AMI: 'ami-e28d098d'
+      AMI: 'ami-099ccc441b2ef41ec'
     'us-east-1':
-      AMI: 'ami-6057e21a'
+      AMI: 'ami-061ac2e015473fbe2'
     'us-east-2':
-      AMI: 'ami-aa1b34cf'
+      AMI: 'ami-056b1936002ca8ede'
     'us-west-1':
-      AMI: 'ami-1a033c7a'
+      AMI: 'ami-028f2b5ee08012131'
     'us-west-2':
-      AMI: 'ami-32d8124a'
+      AMI: 'ami-0e21d4d9303512b8e'
 Resources:
-  SecurityGroupBastionHost:
+  SecurityGroupProxy:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: 'Allowing incoming SSH and ICPM from anywhere.'
+      GroupDescription: 'Allowing incoming HTTP and ICPM from anywhere.'
       VpcId: !Ref VPC
       SecurityGroupIngress:
       - IpProtocol: icmp
-        FromPort: "-1"
-        ToPort: "-1"
+        FromPort: '-1'
+        ToPort: '-1'
         CidrIp: '0.0.0.0/0'
       - IpProtocol: tcp
-        FromPort: '22'
-        ToPort: '22'
-        CidrIp: !Sub '${IpForSSH}/32'
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: '0.0.0.0/0'
       Tags:
       - Key: Name
-        Value: 'Bastion Host'
-  SecurityGroupInstance:
+        Value: Proxy
+  SecurityGroupBackend:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: 'Allowing incoming SSH from the Bastion Host.'
+      GroupDescription: 'Allowing incoming HTTP from the proxy.'
       VpcId: !Ref VPC
       SecurityGroupIngress:
       - IpProtocol: tcp
-        FromPort: '22'
-        ToPort: '22'
-        SourceSecurityGroupId: !Ref SecurityGroupBastionHost
+        FromPort: '80'
+        ToPort: '80'
+        SourceSecurityGroupId: !Ref SecurityGroupProxy
       Tags:
       - Key: Name
-        Value: 'Instance'
-  BastionHost:
+        Value: 'Backend'
+  InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+      - !Ref InstanceRole
+  InstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+      - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+  Proxy:
     Type: 'AWS::EC2::Instance'
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       InstanceType: 't2.micro'
-      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref InstanceProfile # instead of ec2-ssm-core we use a instance profile created in the same template for testability
       SecurityGroupIds:
-      - !Ref SecurityGroupBastionHost
+      - !Ref SecurityGroupProxy
       SubnetId: !Ref Subnet
       Tags:
       - Key: Name
-        Value: 'Bastion Host'
-  Instance1:
+        Value: Proxy
+      UserData:
+        'Fn::Base64': !Sub |
+          #!/bin/bash -ex
+          trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource Proxy --region ${AWS::Region}' ERR
+          amazon-linux-extras install haproxy2
+          cat <<"EOF" | tee /etc/haproxy2/haproxy2.cfg > /dev/null
+          # ---------------------------------------------------------------------
+          # Example configuration for a possible web application.  See the
+          # full configuration options online.
+          #
+          #   https://www.haproxy.org/download/1.8/doc/configuration.txt
+          #
+          #---------------------------------------------------------------------
+
+          #---------------------------------------------------------------------
+          # Global settings
+          #---------------------------------------------------------------------
+          global
+              log         127.0.0.1 local2
+
+              chroot      /var/lib/haproxy2
+              pidfile     /var/run/haproxy2.pid
+              maxconn     4000
+              user        haproxy
+              group       haproxy
+              daemon
+
+              # turn on stats unix socket
+              stats socket /var/lib/haproxy2/stats
+
+              # utilize system-wide crypto-policies
+              ssl-default-bind-ciphers PROFILE=SYSTEM
+              ssl-default-server-ciphers PROFILE=SYSTEM
+
+          #---------------------------------------------------------------------
+          # common defaults that all the 'listen' and 'backend' sections will
+          # use if not designated in their block
+          #---------------------------------------------------------------------
+          defaults
+              mode                    http
+              log                     global
+              option                  httplog
+              option                  dontlognull
+              option http-server-close
+              option forwardfor       except 127.0.0.0/8
+              option                  redispatch
+              retries                 3
+              timeout http-request    10s
+              timeout queue           1m
+              timeout connect         10s
+              timeout client          1m
+              timeout server          1m
+              timeout http-keep-alive 10s
+              timeout check           10s
+              maxconn                 3000
+
+          #---------------------------------------------------------------------
+          # main frontend which proxys to the backends
+          #---------------------------------------------------------------------
+          frontend main
+              bind *:80
+              default_backend             app
+
+          #---------------------------------------------------------------------
+          # round robin balancing between the various backends
+          #---------------------------------------------------------------------
+          backend app
+              balance     roundrobin
+              server  app1 ${Backend.PrivateIp}:80 check
+          EOF
+          systemctl start haproxy2
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource Proxy --region ${AWS::Region}
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT5M
+  Backend:
     Type: 'AWS::EC2::Instance'
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       InstanceType: 't2.micro'
-      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref InstanceProfile # instead of ec2-ssm-core we use a instance profile created in the same template for testability
       SecurityGroupIds:
-      - !Ref SecurityGroupInstance
+      - !Ref SecurityGroupBackend
       SubnetId: !Ref Subnet
       Tags:
       - Key: Name
-        Value: 'Instance 1'
-  Instance2:
-    Type: 'AWS::EC2::Instance'
-    Properties:
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceType: 't2.micro'
-      KeyName: !Ref KeyName
-      SecurityGroupIds:
-      - !Ref SecurityGroupInstance
-      SubnetId: !Ref Subnet
-      Tags:
-      - Key: Name
-        Value: 'Instance 2'
+        Value: 'Backend'
+      UserData:
+        'Fn::Base64': !Sub |
+          #!/bin/bash -ex
+          trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource Backend --region ${AWS::Region}' ERR
+          yum -y install httpd
+          systemctl start httpd
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource Backend --region ${AWS::Region}
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT5M
 Outputs:
-  BastionHostPublicName:
-    Value: !Sub ${BastionHost.PublicDnsName}
-    Description: 'Bastion host public name (connect via SSH as user ec2-user)'
-  Instance1PublicName:
-    Value: !Sub ${Instance1.PublicDnsName}
-    Description: 'Instance1 public name'
-  Instance2PublicName:
-    Value: !Sub ${Instance2.PublicDnsName}
-    Description: 'Instance2 public name'
+  ProxyPublicIpAddress:
+    Value: !Sub ${Proxy.PublicIp}
+    Description: 'Proxy public IP address'
+  BackendPublicIpAddress:
+    Value: !Sub ${Backend.PublicIp}
+    Description: 'Backend public IP address'

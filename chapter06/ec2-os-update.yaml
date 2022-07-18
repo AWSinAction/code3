@@ -1,0 +1,169 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS in Action: chapter 6 (OS update)'
+Parameters:
+  VPC:
+    Description: 'Select the one and only default VPC'
+    Type: 'AWS::EC2::VPC::Id'
+  Subnet:
+    Description: 'Select one of the available subnets'
+    Type: 'AWS::EC2::Subnet::Id'
+  MaintenanceWindowSchedule:
+    Description: 'SSM cron expressions to trigger the maintenace window for patch installation with an optional reboot'
+    Type: String
+    Default: 'cron(0 5 ? * SUN *)'
+  MaintenanceWindowScheduleTimezone:
+    Description: 'Timezone for maintenance window schedule (in IANA format)'
+    Type: String
+    Default: UTC
+Mappings:
+  RegionMap:
+    'eu-north-1':
+      AMI: 'ami-05bc2576a72f22c39'
+    'ap-south-1':
+      AMI: 'ami-0002bdad91f793433'
+    'eu-west-3':
+      AMI: 'ami-0c73cd1c5347436f3'
+    'eu-west-2':
+      AMI: 'ami-029ed17b4ea379178'
+    'eu-west-1':
+      AMI: 'ami-04632f3cef5083854'
+    'ap-northeast-3':
+      AMI: 'ami-0ae88850834d2c589'
+    'ap-northeast-2':
+      AMI: 'ami-0263588f2531a56bd'
+    'ap-northeast-1':
+      AMI: 'ami-0abaa5b0faf689830'
+    'sa-east-1':
+      AMI: 'ami-053a035b046dbb704'
+    'ca-central-1':
+      AMI: 'ami-0173297cea9ba27b0'
+    'ap-southeast-1':
+      AMI: 'ami-0d1d4b8d5a0cd293f'
+    'ap-southeast-2':
+      AMI: 'ami-0f4484f62c4fd8767'
+    'eu-central-1':
+      AMI: 'ami-099ccc441b2ef41ec'
+    'us-east-1':
+      AMI: 'ami-061ac2e015473fbe2'
+    'us-east-2':
+      AMI: 'ami-056b1936002ca8ede'
+    'us-west-1':
+      AMI: 'ami-028f2b5ee08012131'
+    'us-west-2':
+      AMI: 'ami-0e21d4d9303512b8e'
+Resources:
+  SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: !Ref 'AWS::StackName'
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: 'AWS in Action: chapter 6 (OS update)'
+  InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+      - !Ref InstanceRole
+  InstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+      - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      Policies:
+      - PolicyName: PatchManager
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: 's3:GetObject'
+            Resource:
+            - !Sub 'arn:aws:s3:::patch-baseline-snapshot-${AWS::Region}/*'
+            - !Sub 'arn:aws:s3:::aws-ssm-${AWS::Region}/*'
+  Instance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      InstanceType: 't2.micro'
+      IamInstanceProfile: !Ref InstanceProfile # instead of ec2-ssm-core we use a instance profile created in the same template for testability
+      SecurityGroupIds:
+      - !Ref SecurityGroup
+      SubnetId: !Ref Subnet
+      Tags:
+      - Key: Name
+        Value: 'AWS in Action: chapter 6 (OS update)'
+      UserData:
+        'Fn::Base64': !Sub |
+          #!/bin/bash -ex
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT5M
+  MaintenanceWindow:
+    Type: 'AWS::SSM::MaintenanceWindow'
+    Properties:
+      AllowUnassociatedTargets: false
+      Cutoff: 1
+      Duration: 2
+      Name: !Ref 'AWS::StackName'
+      Schedule: !Ref MaintenanceWindowSchedule
+      ScheduleTimezone: !Ref MaintenanceWindowScheduleTimezone
+  MaintenanceWindowTarget:
+    Type: 'AWS::SSM::MaintenanceWindowTarget'
+    Properties:
+      ResourceType: INSTANCE
+      Targets:
+      - Key: InstanceIds
+        Values:
+        - !Ref Instance
+      WindowId: !Ref MaintenanceWindow
+  MaintenanceWindowTask: # patch during maintenance window
+    Type: 'AWS::SSM::MaintenanceWindowTask'
+    Properties:
+      MaxConcurrency: '1'
+      MaxErrors: '1'
+      Priority: 0
+      Targets:
+      - Key: WindowTargetIds
+        Values:
+        - !Ref MaintenanceWindowTarget
+      TaskArn: 'AWS-RunPatchBaseline'
+      TaskInvocationParameters:
+        MaintenanceWindowRunCommandParameters:
+          Parameters:
+            Operation:
+            - Install
+      TaskType: 'RUN_COMMAND'
+      WindowId: !Ref MaintenanceWindow
+  AssociationRunPatchBaselineScan: # scan hourly, but not on startup
+    Type: 'AWS::SSM::Association'
+    Properties:
+      ApplyOnlyAtCronInterval: true
+      Name: 'AWS-RunPatchBaseline'
+      Parameters:
+        Operation:
+        - Scan
+      ScheduleExpression: 'cron(0 0/1 * * ? *)'
+      Targets:
+      - Key: InstanceIds
+        Values:
+        - !Ref Instance
+  AssociationRunPatchBaselineInstall: # patch on startup
+    Type: 'AWS::SSM::Association'
+    Properties:
+      Name: 'AWS-RunPatchBaseline'
+      Parameters:
+        Operation:
+        - Install
+      Targets:
+      - Key: InstanceIds
+        Values:
+        - !Ref Instance
