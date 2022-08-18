@@ -53,14 +53,14 @@ Resources:
       Tags:
       - Key: Name
         Value: 'AWS in Action: chapter 6 (firewall)'
-      # allowing inbound ICMP traffic
       SecurityGroupIngress:
-      - IpProtocol: icmp
+      - Description: 'allowing inbound ICMP traffic'
+        IpProtocol: icmp
         FromPort: '-1'
         ToPort: '-1'
         CidrIp: '0.0.0.0/0'
-      # allowing inbound HTTP traffic
-      - IpProtocol: tcp
+      - Description: 'allowing inbound HTTP traffic'
+        IpProtocol: tcp
         FromPort: '80'
         ToPort: '80'
         CidrIp: '0.0.0.0/0'

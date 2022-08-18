@@ -51,11 +51,13 @@ Resources:
       GroupDescription: 'Allowing incoming HTTP and ICPM from anywhere.'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-      - IpProtocol: icmp
+      - Description: 'allowing inbound ICMP traffic'
+        IpProtocol: icmp
         FromPort: '-1'
         ToPort: '-1'
         CidrIp: '0.0.0.0/0'
-      - IpProtocol: tcp
+      - Description: 'allowing inbound HTTP traffic'
+        IpProtocol: tcp
         FromPort: '80'
         ToPort: '80'
         CidrIp: '0.0.0.0/0'
@@ -68,7 +70,8 @@ Resources:
       GroupDescription: 'Allowing incoming HTTP from the proxy.'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-      - IpProtocol: tcp
+      - Description: 'allowing inbound HTTP traffic from proxy'
+        IpProtocol: tcp
         FromPort: '80'
         ToPort: '80'
         SourceSecurityGroupId: !Ref SecurityGroupProxy
