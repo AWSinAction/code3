@@ -175,6 +175,7 @@ Resources:
           #---------------------------------------------------------------------
           backend app
               balance     roundrobin
+              http-response set-header X-Backend %s
               server  app1 ${Backend.PrivateIp}:80 check
           EOF
           systemctl start haproxy2
