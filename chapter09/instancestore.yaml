@@ -74,7 +74,7 @@ Resources:
     Type: 'AWS::EC2::Instance'
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceType: 'c6gd.medium'
+      InstanceType: 'c5d.large'
       SecurityGroupIds:
       - !Ref SecurityGroup
       SubnetId: !Ref Subnet
