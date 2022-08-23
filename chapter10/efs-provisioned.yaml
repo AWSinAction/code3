@@ -1,43 +1,42 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AWS in Action: chapter 10'
-Parameters:
-  KeyName:
-    Description: Key Pair name
-    Type: 'AWS::EC2::KeyPair::KeyName'
-    Default: mykey
 Mappings:
   RegionMap:
+    'eu-north-1':
+      AMI: 'ami-05bc2576a72f22c39'
     'ap-south-1':
-      AMI: 'ami-2ed19c41'
+      AMI: 'ami-0002bdad91f793433'
     'eu-west-3':
-      AMI: 'ami-c8a017b5'
+      AMI: 'ami-0c73cd1c5347436f3'
     'eu-west-2':
-      AMI: 'ami-e3051987'
+      AMI: 'ami-029ed17b4ea379178'
     'eu-west-1':
-      AMI: 'ami-760aaa0f'
+      AMI: 'ami-04632f3cef5083854'
+    'ap-northeast-3':
+      AMI: 'ami-0ae88850834d2c589'
     'ap-northeast-2':
-      AMI: 'ami-fc862292'
+      AMI: 'ami-0263588f2531a56bd'
     'ap-northeast-1':
-      AMI: 'ami-2803ac4e'
+      AMI: 'ami-0abaa5b0faf689830'
     'sa-east-1':
-      AMI: 'ami-1678037a'
+      AMI: 'ami-053a035b046dbb704'
     'ca-central-1':
-      AMI: 'ami-ef3b838b'
+      AMI: 'ami-0173297cea9ba27b0'
     'ap-southeast-1':
-      AMI: 'ami-dd7935be'
+      AMI: 'ami-0d1d4b8d5a0cd293f'
     'ap-southeast-2':
-      AMI: 'ami-1a668878'
+      AMI: 'ami-0f4484f62c4fd8767'
     'eu-central-1':
-      AMI: 'ami-e28d098d'
+      AMI: 'ami-099ccc441b2ef41ec'
     'us-east-1':
-      AMI: 'ami-6057e21a'
+      AMI: 'ami-061ac2e015473fbe2'
     'us-east-2':
-      AMI: 'ami-aa1b34cf'
+      AMI: 'ami-056b1936002ca8ede'
     'us-west-1':
-      AMI: 'ami-1a033c7a'
+      AMI: 'ami-028f2b5ee08012131'
     'us-west-2':
-      AMI: 'ami-32d8124a'
+      AMI: 'ami-0e21d4d9303512b8e'
 Resources:
   ##########################################################################
   #                                                                        #
@@ -129,7 +128,10 @@ Resources:
   ##########################################################################
   FileSystem:
     Type: 'AWS::EFS::FileSystem'
-    Properties: {}
+    Properties:
+      Encrypted: true
+      ThroughputMode: provisioned
+      ProvisionedThroughputInMibps: 100
   EFSClientSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -140,10 +142,10 @@ Resources:
     Properties:
       GroupDescription: 'EFS Mount target'
       SecurityGroupIngress:
-      - FromPort: 2049
-        IpProtocol: tcp
-        SourceSecurityGroupId: !Ref EFSClientSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 2049
         ToPort: 2049
+        SourceSecurityGroupId: !Ref EFSClientSecurityGroup
       VpcId: !Ref VPC
   MountTargetA:
     Type: 'AWS::EFS::MountTarget'
@@ -168,24 +170,50 @@ Resources:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: 'EC2 instance'
-      SecurityGroupIngress:
-      - CidrIp: '0.0.0.0/0'
-        FromPort: 22
-        IpProtocol: tcp
-        ToPort: 22
+      SecurityGroupEgress:
+      - IpProtocol: tcp 
+        FromPort: 443
+        ToPort: 443
+        CidrIp: '0.0.0.0/0'
       VpcId: !Ref VPC
+  IamRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: ssm
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+            Resource: '*'
+  IamInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+      - !Ref IamRole
   EC2InstanceA:
     Type: 'AWS::EC2::Instance'
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       InstanceType: 't2.micro'
-      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref IamInstanceProfile
       NetworkInterfaces:
       - AssociatePublicIpAddress: true
         DeleteOnTermination: true
         DeviceIndex: 0
         GroupSet:
-        - !Ref EC2SecurityGroup
         - !Ref EFSClientSecurityGroup
         SubnetId: !Ref SubnetA
       UserData:
@@ -193,6 +221,7 @@ Resources:
           #!/bin/bash -x
           bash -ex << "TRY"
             # wait until EFS file system is available
+            yum install -y nc
             while ! nc -z ${FileSystem}.efs.${AWS::Region}.amazonaws.com 2049; do sleep 10; done
             sleep 10
 
@@ -208,6 +237,9 @@ Resources:
             cp -a /oldhome/. /home
           TRY
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource EC2InstanceA --region ${AWS::Region}
+      Tags:
+      - Key: Name
+        Value: 'efs-a'
     CreationPolicy:
       ResourceSignal:
         Timeout: PT10M
@@ -219,13 +251,12 @@ Resources:
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       InstanceType: 't2.micro'
-      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref IamInstanceProfile
       NetworkInterfaces:
       - AssociatePublicIpAddress: true
         DeleteOnTermination: true
         DeviceIndex: 0
         GroupSet:
-        - !Ref EC2SecurityGroup
         - !Ref EFSClientSecurityGroup
         SubnetId: !Ref SubnetB
       UserData:
@@ -233,6 +264,7 @@ Resources:
           #!/bin/bash -x
           bash -ex << "TRY"
             # wait until EFS file system is available
+            yum install -y nc
             while ! nc -z ${FileSystem}.efs.${AWS::Region}.amazonaws.com 2049; do sleep 10; done
             sleep 10
 
@@ -241,6 +273,9 @@ Resources:
             mount -a
           TRY
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource EC2InstanceB --region ${AWS::Region}
+      Tags:
+      - Key: Name
+        Value: 'efs-b'
     CreationPolicy:
       ResourceSignal:
         Timeout: PT10M
@@ -248,9 +283,9 @@ Resources:
     - VPCGatewayAttachment
     - MountTargetB
 Outputs:
-  EC2InstanceAIPAddress:
-    Value: !GetAtt 'EC2InstanceA.PublicIp'
-    Description: 'EC2 Instance (AZ A) public IP address (connect via SSH as user ec2-user)'
-  EC2InstanceBIPAddress:
-    Value: !GetAtt 'EC2InstanceB.PublicIp'
-    Description: 'EC2 Instance (AZ B) public IP address (connect via SSH as user ec2-user)'
+  EC2InstanceA:
+    Value: !Ref EC2InstanceA
+    Description: 'Id of EC2 Instance in AZ A (connect via Session Manager)'
+  EC2InstanceB:
+    Value: !Ref EC2InstanceB
+    Description: 'Id of EC2 Instance in AZ B (connect via Session Manager)'
