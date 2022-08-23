@@ -171,7 +171,7 @@ Resources:
     Properties:
       GroupDescription: 'EC2 instance'
       SecurityGroupEgress:
-      - IpProtocol: tcp 
+      - IpProtocol: tcp
         FromPort: 443
         ToPort: 443
         CidrIp: '0.0.0.0/0'
@@ -309,12 +309,12 @@ Resources:
             Resource: !Sub 'arn:${AWS::Partition}:elasticfilesystem:${AWS::Region}:${AWS::AccountId}:file-system/${FileSystem}'
   BackupVault:
     Type: 'AWS::Backup::BackupVault'
-    Properties: 
+    Properties:
       BackupVaultName: !Ref 'AWS::StackName'
   BackupPlan:
     Type: 'AWS::Backup::BackupPlan'
-    Properties: 
-      BackupPlan: 
+    Properties:
+      BackupPlan:
         BackupPlanName: 'efs-daily'
         BackupPlanRule:
         - RuleName: 'efs-daily'
@@ -325,7 +325,7 @@ Resources:
           CompletionWindowMinutes: 1440
   BackupSelection:
     Type: 'AWS::Backup::BackupSelection'
-    Properties: 
+    Properties:
       BackupPlanId: !Ref BackupPlan
       BackupSelection:
         SelectionName: 'efs'
