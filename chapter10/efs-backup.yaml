@@ -166,16 +166,6 @@ Resources:
   #                        EC2 instances for testing                       #
   #                                                                        #
   ##########################################################################
-  EC2SecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupDescription: 'EC2 instance'
-      SecurityGroupEgress:
-      - IpProtocol: tcp
-        FromPort: 443
-        ToPort: 443
-        CidrIp: '0.0.0.0/0'
-      VpcId: !Ref VPC
   IamRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -218,24 +208,25 @@ Resources:
         SubnetId: !Ref SubnetA
       UserData:
         'Fn::Base64': !Sub |
-          #!/bin/bash -x
-          bash -ex << "TRY"
-            # wait until EFS file system is available
-            yum install -y nc
-            while ! nc -z ${FileSystem}.efs.${AWS::Region}.amazonaws.com 2049; do sleep 10; done
-            sleep 10
+          #!/bin/bash -ex
+          trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource EC2InstanceA --region ${AWS::Region}' ERR
+          
+          # wait until EFS file system is available
+          yum install -y nc
+          while ! nc -z ${FileSystem}.efs.${AWS::Region}.amazonaws.com 2049; do sleep 10; done
+          sleep 10
 
-            # copy existing /home to /oldhome
-            mkdir /oldhome
-            cp -a /home/. /oldhome
+          # copy existing /home to /oldhome
+          mkdir /oldhome
+          cp -a /home/. /oldhome
 
-            # mount EFS file system
-            echo "${FileSystem}.efs.${AWS::Region}.amazonaws.com:/ /home nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,_netdev 0 0" >> /etc/fstab
-            mount -a
+          # mount EFS file system
+          echo "${FileSystem}.efs.${AWS::Region}.amazonaws.com:/ /home nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,_netdev 0 0" >> /etc/fstab
+          mount -a
 
-            # copy /oldhome to new /home
-            cp -a /oldhome/. /home
-          TRY
+          # copy /oldhome to new /home
+          cp -a /oldhome/. /home
+
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource EC2InstanceA --region ${AWS::Region}
       Tags:
       - Key: Name
@@ -261,17 +252,18 @@ Resources:
         SubnetId: !Ref SubnetB
       UserData:
         'Fn::Base64': !Sub |
-          #!/bin/bash -x
-          bash -ex << "TRY"
-            # wait until EFS file system is available
-            yum install -y nc
-            while ! nc -z ${FileSystem}.efs.${AWS::Region}.amazonaws.com 2049; do sleep 10; done
-            sleep 10
+          #!/bin/bash -ex
+          trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource EC2InstanceB --region ${AWS::Region}' ERR
 
-            # mount EFS file system
-            echo "${FileSystem}.efs.${AWS::Region}.amazonaws.com:/ /home nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,_netdev 0 0" >> /etc/fstab
-            mount -a
-          TRY
+          # wait until EFS file system is available
+          yum install -y nc
+          while ! nc -z ${FileSystem}.efs.${AWS::Region}.amazonaws.com 2049; do sleep 10; done
+          sleep 10
+
+          # mount EFS file system
+          echo "${FileSystem}.efs.${AWS::Region}.amazonaws.com:/ /home nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,_netdev 0 0" >> /etc/fstab
+          mount -a
+          
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource EC2InstanceB --region ${AWS::Region}
       Tags:
       - Key: Name
