@@ -178,6 +178,16 @@ Resources:
             - 'ec2.amazonaws.com'
           Action: 'sts:AssumeRole'
       Policies:
+      - PolicyName: efs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'elasticfilesystem:ClientRootAccess'
+            - 'elasticfilesystem:ClientWrite'
+            - 'elasticfilesystem:ClientMount'
+            Resource: !GetAtt 'FileSystem.Arn'
       - PolicyName: ssm
         PolicyDocument:
           Version: '2012-10-17'
@@ -210,18 +220,16 @@ Resources:
         'Fn::Base64': !Sub |
           #!/bin/bash -ex
           trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource EC2InstanceA --region ${AWS::Region}' ERR
-          
-          # wait until EFS file system is available
-          yum install -y nc
-          while ! nc -z ${FileSystem}.efs.${AWS::Region}.amazonaws.com 2049; do sleep 10; done
-          sleep 10
 
           # copy existing /home to /oldhome
           mkdir /oldhome
           cp -a /home/. /oldhome
 
+          # install EFS Utils
+          yum install -y amazon-efs-utils
+
           # mount EFS file system
-          echo "${FileSystem}.efs.${AWS::Region}.amazonaws.com:/ /home nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,_netdev 0 0" >> /etc/fstab
+          echo "${FileSystem}:/ /home efs _netdev,tls,iam 0 0" >> /etc/fstab
           mount -a
 
           # copy /oldhome to new /home
@@ -255,15 +263,13 @@ Resources:
           #!/bin/bash -ex
           trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource EC2InstanceB --region ${AWS::Region}' ERR
 
-          # wait until EFS file system is available
-          yum install -y nc
-          while ! nc -z ${FileSystem}.efs.${AWS::Region}.amazonaws.com 2049; do sleep 10; done
-          sleep 10
+          # install EFS Utils
+          yum install -y amazon-efs-utils
 
           # mount EFS file system
-          echo "${FileSystem}.efs.${AWS::Region}.amazonaws.com:/ /home nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,_netdev 0 0" >> /etc/fstab
+          echo "${FileSystem}:/ /home efs _netdev,tls,iam 0 0" >> /etc/fstab
           mount -a
-          
+
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource EC2InstanceB --region ${AWS::Region}
       Tags:
       - Key: Name
