@@ -221,12 +221,16 @@ Resources:
           #!/bin/bash -ex
           trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource EC2InstanceA --region ${AWS::Region}' ERR
 
+          # install dependencies
+          yum install -y nc amazon-efs-utils
+
+          # wait until EFS file system is available
+          while ! nc -z ${FileSystem}.efs.${AWS::Region}.amazonaws.com 2049; do sleep 10; done
+          sleep 10
+
           # copy existing /home to /oldhome
           mkdir /oldhome
           cp -a /home/. /oldhome
-
-          # install EFS Utils
-          yum install -y amazon-efs-utils
 
           # mount EFS file system
           echo "${FileSystem}:/ /home efs _netdev,tls,iam 0 0" >> /etc/fstab
@@ -263,8 +267,12 @@ Resources:
           #!/bin/bash -ex
           trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource EC2InstanceB --region ${AWS::Region}' ERR
 
-          # install EFS Utils
-          yum install -y amazon-efs-utils
+          # install dependencies
+          yum install -y nc amazon-efs-utils
+
+          # wait until EFS file system is available
+          while ! nc -z ${FileSystem}.efs.${AWS::Region}.amazonaws.com 2049; do sleep 10; done
+          sleep 10
 
           # mount EFS file system
           echo "${FileSystem}:/ /home efs _netdev,tls,iam 0 0" >> /etc/fstab
