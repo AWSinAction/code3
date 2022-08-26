@@ -132,6 +132,16 @@ Resources:
       Encrypted: true
       ThroughputMode: bursting
       PerformanceMode: generalPurpose
+      FileSystemPolicy:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: 'Deny'
+          Action: '*'
+          Principal:
+            AWS: '*'
+          Condition:
+            Bool:
+              'aws:SecureTransport': 'false'
   EFSClientSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
