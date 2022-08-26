@@ -243,7 +243,7 @@ Resources:
           cp -a /home/. /oldhome
 
           # mount EFS file system
-          echo "${FileSystem}:/ /home efs _netdev,tls,iam 0 0" >> /etc/fstab
+          echo "${FileSystem}:/ /home efs _netdev,noresvport,tls,iam 0 0" >> /etc/fstab
           mount -a
 
           # copy /oldhome to new /home
@@ -285,7 +285,7 @@ Resources:
           sleep 10
 
           # mount EFS file system
-          echo "${FileSystem}:/ /home efs _netdev,tls,iam 0 0" >> /etc/fstab
+          echo "${FileSystem}:/ /home efs _netdev,noresvport,tls,iam 0 0" >> /etc/fstab
           mount -a
 
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource EC2InstanceB --region ${AWS::Region}
