@@ -75,17 +75,10 @@ Resources:
     Properties:
       IamInstanceProfile: !Ref InstanceProfile # instead of ec2-ssm-core we use a instance profile created in the same template for testability
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceType: 'm3.medium'
+      InstanceType: 'm6id.large'
       SecurityGroupIds:
       - !Ref SecurityGroup
       SubnetId: !Ref Subnet
-      BlockDeviceMappings:
-      - DeviceName: '/dev/xvda'
-        Ebs:
-          VolumeSize: '8'
-          VolumeType: gp2
-      - DeviceName: '/dev/xvdb'
-        VirtualName: ephemeral0
       Tags:
       - Key: Name
         Value: 'AWS in Action: chapter 9 (Instance Store)'
