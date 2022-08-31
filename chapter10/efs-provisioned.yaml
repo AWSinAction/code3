@@ -132,6 +132,7 @@ Resources:
       Encrypted: true
       ThroughputMode: provisioned
       ProvisionedThroughputInMibps: 1
+      PerformanceMode: generalPurpose
       FileSystemPolicy:
         Version: '2012-10-17'
         Statement:
