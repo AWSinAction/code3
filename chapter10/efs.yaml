@@ -197,7 +197,12 @@ Resources:
             - 'elasticfilesystem:ClientRootAccess'
             - 'elasticfilesystem:ClientWrite'
             - 'elasticfilesystem:ClientMount'
+            - 'elasticfilesystem:DescribeMountTargets'
             Resource: !GetAtt 'FileSystem.Arn'
+          - Effect: Allow
+            Action:
+            - 'ec2:DescribeAvailabilityZones'
+            Resource: '*'
       - PolicyName: ssm
         PolicyDocument:
           Version: '2012-10-17'
@@ -233,10 +238,7 @@ Resources:
 
           # install dependencies
           yum install -y nc amazon-efs-utils
-
-          # wait until EFS file system is available
-          while ! nc -z ${FileSystem}.efs.${AWS::Region}.amazonaws.com 2049; do sleep 10; done
-          sleep 10
+          pip3 install botocore
 
           # copy existing /home to /oldhome
           mkdir /oldhome
@@ -279,10 +281,7 @@ Resources:
 
           # install dependencies
           yum install -y nc amazon-efs-utils
-
-          # wait until EFS file system is available
-          while ! nc -z ${FileSystem}.efs.${AWS::Region}.amazonaws.com 2049; do sleep 10; done
-          sleep 10
+          pip3 install botocore
 
           # mount EFS file system
           echo "${FileSystem}:/ /home efs _netdev,noresvport,tls,iam 0 0" >> /etc/fstab
