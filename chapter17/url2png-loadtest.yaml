@@ -175,19 +175,12 @@ Resources:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
       LaunchTemplateData:
-        BlockDeviceMappings:
-        - DeviceName: '/dev/xvda'
-          Ebs:
-            Encrypted: true
-            VolumeType: gp3
         IamInstanceProfile:
           Name: !Ref IamInstanceProfile
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         Monitoring:
           Enabled: false
         InstanceType: 't2.micro'
-        MetadataOptions:
-          HttpTokens: required
         NetworkInterfaces:
         - AssociatePublicIpAddress: true
           DeviceIndex: 0
