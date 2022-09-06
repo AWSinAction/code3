@@ -366,7 +366,6 @@ Resources:
                 ensureRunning: true
     Properties:
       LaunchTemplateData:
-        BlockDeviceMappings:
         IamInstanceProfile:
           Name: !Ref InstanceProfile
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
