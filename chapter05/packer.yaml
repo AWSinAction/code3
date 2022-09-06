@@ -168,19 +168,12 @@ Resources:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
       LaunchTemplateData:
-        BlockDeviceMappings:
-        - DeviceName: '/dev/xvda'
-          Ebs:
-            Encrypted: true
-            VolumeType: gp3
         IamInstanceProfile:
           Name: !Ref InstanceProfile
         ImageId: !Ref AMI
         Monitoring:
           Enabled: false
         InstanceType: 't2.micro'
-        MetadataOptions:
-          HttpTokens: required
         NetworkInterfaces:
         - AssociatePublicIpAddress: true
           DeviceIndex: 0
