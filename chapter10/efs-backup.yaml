@@ -237,12 +237,15 @@ Resources:
           trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource EC2InstanceA --region ${AWS::Region}' ERR
 
           # install dependencies
-          yum install -y nc amazon-efs-utils
+          yum install -y amazon-efs-utils
           pip3 install botocore
 
           # copy existing /home to /oldhome
           mkdir /oldhome
           cp -a /home/. /oldhome
+
+          # wait for EFS mount target
+          while ! (echo > /dev/tcp/${FileSystem}.efs.${AWS::Region}.amazonaws.com/2049) >/dev/null 2>&1; do sleep 5; done
 
           # mount EFS file system
           echo "${FileSystem}:/ /home efs _netdev,noresvport,tls,iam 0 0" >> /etc/fstab
@@ -280,8 +283,11 @@ Resources:
           trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource EC2InstanceB --region ${AWS::Region}' ERR
 
           # install dependencies
-          yum install -y nc amazon-efs-utils
+          yum install -y amazon-efs-utils
           pip3 install botocore
+
+          # wait for EFS mount target
+          while ! (echo > /dev/tcp/${FileSystem}.efs.${AWS::Region}.amazonaws.com/2049) >/dev/null 2>&1; do sleep 5; done
 
           # mount EFS file system
           echo "${FileSystem}:/ /home efs _netdev,noresvport,tls,iam 0 0" >> /etc/fstab
