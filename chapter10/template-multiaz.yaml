@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AWS in Action: chapter 11 (Wordpress with RDS)'
+Description: 'AWS in Action: chapter 10 (Wordpress with RDS)'
 Parameters:
   WordpressAdminPassword:
     Description: 'The password for the Wordpress administrator.'
@@ -201,6 +201,7 @@ Resources:
       VPCSecurityGroups:
       - !Sub ${DatabaseSecurityGroup.GroupId}
       DBSubnetGroupName: !Ref DBSubnetGroup
+      MultiAZ: true
     DependsOn: VPCGatewayAttachment
   DBSubnetGroup:
     Type: 'AWS::RDS::DBSubnetGroup'

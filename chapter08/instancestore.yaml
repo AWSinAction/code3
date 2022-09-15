@@ -1,12 +1,12 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AWS in Action: chapter 6 (firewall 2)'
+Description: 'AWS in Action: chapter 8 (Instance Store)'
 Parameters:
   VPC:
-    Description: 'Select the one and only default VPC'
+    Description: 'Just select the one and only default VPC'
     Type: 'AWS::EC2::VPC::Id'
   Subnet:
-    Description: 'Select one of the available subnets'
+    Description: 'Just select one of the available subnets'
     Type: 'AWS::EC2::Subnet::Id'
 Mappings:
   RegionMap:
@@ -48,17 +48,11 @@ Resources:
   SecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: 'Learn how to protect your EC2 Instance.'
+      GroupDescription: !Ref 'AWS::StackName'
       VpcId: !Ref VPC
       Tags:
       - Key: Name
-        Value: 'AWS in Action: chapter 6 (firewall)'
-      SecurityGroupIngress:
-      - Description: 'allowing inbound ICMP traffic'
-        IpProtocol: icmp
-        FromPort: '-1'
-        ToPort: '-1'
-        CidrIp: '0.0.0.0/0'
+        Value: 'AWS in Action: chapter 8 (Instance Store)'
   InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
@@ -79,26 +73,23 @@ Resources:
   Instance:
     Type: 'AWS::EC2::Instance'
     Properties:
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceType: 't2.micro'
       IamInstanceProfile: !Ref InstanceProfile # instead of ec2-ssm-core we use a instance profile created in the same template for testability
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      InstanceType: 'm6id.large'
       SecurityGroupIds:
       - !Ref SecurityGroup
       SubnetId: !Ref Subnet
       Tags:
       - Key: Name
-        Value: 'AWS in Action: chapter 6 (firewall)'
+        Value: 'AWS in Action: chapter 8 (Instance Store)'
       UserData:
         'Fn::Base64': !Sub |
           #!/bin/bash -ex
-          trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}' ERR
-          yum -y install httpd
-          systemctl start httpd
           /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}
     CreationPolicy:
       ResourceSignal:
         Timeout: PT5M
 Outputs:
-  PublicIpAddress:
-    Value: !Sub ${Instance.PublicIp}
-    Description: 'Public IP address'
+  InstanceId:
+    Value: !Ref Instance
+    Description: 'Instance id (connect via Session Manager)'

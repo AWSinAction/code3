@@ -1,10 +1,51 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AWS in Action: chapter 5 (Deploying Etherpad with Packer)'
+Description: 'AWS in Action: chapter 14 (Load Balancer)'
 Parameters:
-  AMI:
-    Type: 'AWS::EC2::Image::Id'
-    Description: 'The AMI ID'
+  NumberOfVirtualMachines:
+    Description: 'Number of virtual machines'
+    Type: Number
+    Default: 2
+    MinValue: 2
+    MaxValue: 4
+Mappings:
+  RegionMap:
+    'ap-northeast-1':
+      AMI: 'ami-0821a82442e7b07b7'
+    'ap-northeast-2':
+      AMI: 'ami-05d8ac3eaa138063e'
+    'ap-northeast-3':
+      AMI: 'ami-090a106da3b2a431e'
+    'ap-south-1':
+      AMI: 'ami-0be27e43fa0ca4327'
+    'ap-southeast-1':
+      AMI: 'ami-00ed24e12fb2621c0'
+    'ap-southeast-2':
+      AMI: 'ami-098a7b802c7f82a10'
+    'ca-central-1':
+      AMI: 'ami-0fe90b6891c9efa7d'
+    'eu-central-1':
+      AMI: 'ami-087e8841cf1ef01c1'
+    'eu-north-1':
+      AMI: 'ami-0dffb26b8999b187f'
+    'eu-south-1':
+      AMI: 'ami-046a7d2c19d70d551'
+    'eu-west-1':
+      AMI: 'ami-0b50507320ee0dce9'
+    'eu-west-2':
+      AMI: 'ami-0628fc78c2d649efe'
+    'eu-west-3':
+      AMI: 'ami-00d50d681d3ad9176'
+    'sa-east-1':
+      AMI: 'ami-02d4db2a2f298628a'
+    'us-east-1':
+      AMI: 'ami-0ad3c79dfb359f1ba'
+    'us-east-2':
+      AMI: 'ami-0835623ff6e403fad'
+    'us-west-1':
+      AMI: 'ami-09011ac37d93264e8'
+    'us-west-2':
+      AMI: 'ami-069a8075ad6b34db8'
 Resources:
   VPC:
     Type: 'AWS::EC2::VPC'
@@ -84,60 +125,60 @@ Resources:
       RuleAction: allow
       Egress: true
       CidrBlock: '0.0.0.0/0'
-  LoadBalancer:
-    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
-    Properties:
-      Subnets:
-      - Ref: SubnetA
-      - Ref: SubnetB
-      SecurityGroups:
-      - !Ref LoadBalancerSecurityGroup
-      Scheme: 'internet-facing'
-    DependsOn: VPCGatewayAttachment
-  LoadBalancerListener:
-    Type: 'AWS::ElasticLoadBalancingV2::Listener'
-    Properties:
-      DefaultActions:
-      - Type: forward
-        TargetGroupArn: !Ref LoadBalancerTargetGroup
-      LoadBalancerArn: !Ref LoadBalancer
-      Port: 80
-      Protocol: HTTP
-  LoadBalancerTargetGroup:
-    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
-    Properties:
-      HealthCheckIntervalSeconds: 5
-      HealthCheckPath: '/'
-      HealthCheckPort: 9001
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 3
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 2
-      Matcher:
-        HttpCode: '200,302'
-      Port: 9001
-      Protocol: HTTP
-      VpcId: !Ref VPC
   LoadBalancerSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: 'awsinaction-elb-sg'
+      GroupDescription: 'alb-sg'
       VpcId: !Ref VPC
       SecurityGroupIngress:
       - CidrIp: '0.0.0.0/0'
         FromPort: 80
         IpProtocol: tcp
         ToPort: 80
+  LoadBalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Scheme: 'internet-facing'
+      SecurityGroups:
+      - !Ref LoadBalancerSecurityGroup
+      Subnets:
+      - !Ref SubnetA
+      - !Ref SubnetB
+      Type: application
+    DependsOn: 'VPCGatewayAttachment'
+  Listener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+      - TargetGroupArn: !Ref TargetGroup
+        Type: forward
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+  TargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: '/index.html'
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200-299'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
   WebServerSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: 'awsinaction-sg'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-      - FromPort: 9001
+      - SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+        FromPort: 80
         IpProtocol: tcp
-        SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
-        ToPort: 9001
+        ToPort: 80
   InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
@@ -166,11 +207,35 @@ Resources:
             Resource: '*'
   LaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
+    Metadata:
+      'AWS::CloudFormation::Init':
+        config:
+          packages:
+            yum:
+              httpd: []
+          files:
+            '/tmp/config':
+              content: |
+                #!/bin/bash -ex
+                PRIVATE_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
+                echo "<html><head><title>$PRIVATE_IP</title></head><body><h1>$PRIVATE_IP</h1></body></html>" > index.html
+              mode: '000500'
+              owner: root
+              group: root
+          commands:
+            '01_config':
+              command: '/tmp/config'
+              cwd: '/var/www/html'
+          services:
+            sysvinit:
+              httpd:
+                enabled: true
+                ensureRunning: true
     Properties:
       LaunchTemplateData:
         IamInstanceProfile:
           Name: !Ref InstanceProfile
-        ImageId: !Ref AMI
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         Monitoring:
           Enabled: false
         InstanceType: 't2.micro'
@@ -181,85 +246,28 @@ Resources:
           - !Ref WebServerSecurityGroup
         UserData:
           'Fn::Base64': !Sub |
-            #!/bin/bash -ex
-            trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}' ERR
-            cd /opt/etherpad-lite/
-            echo "
-            {
-              \"title\": \"Etherpad\",
-              \"dbType\": \"mysql\",
-              \"dbSettings\": {
-                \"host\": \"${Database.Endpoint.Address}\",
-                \"port\": \"3306\",
-                \"database\": \"etherpad\",
-                \"user\": \"etherpad\",
-                \"password\": \"etherpad\"
-              },
-              \"exposeVersion\": true
-            }
-            " > settings.json
-            /opt/etherpad-lite/src/bin/fastRun.sh &
-            /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
+            #!/bin/bash -x
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchTemplate --region ${AWS::Region}
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
   AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
-      TargetGroupARNs:
-      - !Ref LoadBalancerTargetGroup
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
-      MinSize: 1
-      MaxSize: 2
-      HealthCheckGracePeriod: 300
-      HealthCheckType: ELB
+      MinSize: !Ref NumberOfVirtualMachines
+      MaxSize: !Ref NumberOfVirtualMachines
+      DesiredCapacity: !Ref NumberOfVirtualMachines
+      TargetGroupARNs:
+      - !Ref TargetGroup
       VPCZoneIdentifier:
       - !Ref SubnetA
       - !Ref SubnetB
-      Tags:
-      - PropagateAtLaunch: true
-        Value: etherpad
-        Key: Name
     CreationPolicy:
       ResourceSignal:
-        Timeout: PT10M
-    UpdatePolicy:
-      AutoScalingRollingUpdate:
-        PauseTime: PT10M
-        WaitOnResourceSignals: true
-        MinInstancesInService: 1
-  DatabaseSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupDescription: 'awsinaction-db-sg'
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 3306
-        ToPort: 3306
-        SourceSecurityGroupId: !Ref WebServerSecurityGroup
-  Database:
-    Type: 'AWS::RDS::DBInstance'
-    DeletionPolicy: Delete # For AWS::RDS::DBInstance resources that don't specify the DBClusterIdentifier property, the default policy is Snapshot which can cause unwanted costs. However, for production setups, we highly recommend to stay with the default to avoid data loss.
-    Properties:
-      AllocatedStorage: 5
-      BackupRetentionPeriod: 0
-      DBInstanceClass: 'db.t2.micro'
-      DBName: etherpad
-      Engine: MySQL
-      MasterUsername: etherpad
-      MasterUserPassword: etherpad
-      VPCSecurityGroups:
-      - !Sub ${DatabaseSecurityGroup.GroupId}
-      DBSubnetGroupName: !Ref DBSubnetGroup
-    DependsOn: VPCGatewayAttachment
-  DBSubnetGroup:
-    Type: 'AWS::RDS::DBSubnetGroup'
-    Properties:
-      DBSubnetGroupDescription: DB subnet group
-      SubnetIds:
-      - Ref: SubnetA
-      - Ref: SubnetB
+        Timeout: 'PT10M'
+    DependsOn: 'VPCGatewayAttachment'
 Outputs:
   URL:
     Value: !Sub 'http://${LoadBalancer.DNSName}'
-    Description: 'Etherpad URL'
+    Description: 'Load Balancer URL'

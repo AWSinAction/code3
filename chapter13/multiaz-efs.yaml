@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AWS in Action: chapter 14 (Jenkins running in Auto Scaling Group over multiple AZs)'
+Description: 'AWS in Action: chapter 13 (Jenkins running in Auto Scaling Group over multiple AZs, with EFS)'
 Parameters:
   JenkinsAdminPassword:
     Description: 'Password for Jenkins admin user'
@@ -130,6 +130,38 @@ Resources:
       CidrBlock: '0.0.0.0/0'
   ##########################################################################
   #                                                                        #
+  #                          EFS related resources                         #
+  #                                                                        #
+  ##########################################################################
+  FileSystem:
+    Type: 'AWS::EFS::FileSystem'
+    Properties: {}
+  MountTargetSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'EFS Mount target'
+      SecurityGroupIngress:
+      - FromPort: 2049
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref SecurityGroup
+        ToPort: 2049
+      VpcId: !Ref VPC
+  MountTargetA:
+    Type: 'AWS::EFS::MountTarget'
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SecurityGroups:
+      - !Ref MountTargetSecurityGroup
+      SubnetId: !Ref SubnetA
+  MountTargetB:
+    Type: 'AWS::EFS::MountTarget'
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SecurityGroups:
+      - !Ref MountTargetSecurityGroup
+      SubnetId: !Ref SubnetB
+  ##########################################################################
+  #                                                                        #
   #                   Auto Scaling Group running Jenkins                   #
   #                                                                        #
   ##########################################################################
@@ -140,7 +172,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
       - Key: Name
-        Value: 'jenkins-multiaz'
+        Value: 'jenkins-multiaz-efs'
       SecurityGroupIngress:
       - IpProtocol: tcp
         FromPort: 8080
@@ -173,9 +205,16 @@ Resources:
             # Installing Jenkins
             amazon-linux-extras enable epel=7.11 && yum -y clean metadata
             yum install -y epel-release && yum -y clean metadata
-            yum install -y java-11-amazon-corretto-headless daemonize
+            yum install -y java-11-amazon-corretto-headless daemonize amazon-efs-utils
             wget -q -T 60 http://ftp-chi.osuosl.org/pub/jenkins/redhat-stable/jenkins-2.319.1-1.1.noarch.rpm
             rpm --install jenkins-2.319.1-1.1.noarch.rpm
+            
+            # Mounting EFS volume
+            mkdir -p /var/lib/jenkins
+            echo "${FileSystem}:/ /var/lib/jenkins efs tls,_netdev 0 0" >> /etc/fstab
+            while ! (echo > /dev/tcp/${FileSystem}.efs.${AWS::Region}.amazonaws.com/2049) >/dev/null 2>&1; do sleep 5; done
+            mount -a -t efs
+            chown -R jenkins:jenkins /var/lib/jenkins
 
             # Configuring Jenkins
             sed -i -e 's/JENKINS_ARGS=""/JENKINS_ARGS="--argumentsRealm.passwd.admin=${JenkinsAdminPassword} --argumentsRealm.roles.admin=admin"/g' /etc/sysconfig/jenkins
@@ -196,7 +235,7 @@ Resources:
         Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
       Tags:
       - Key: Name
-        Value: 'jenkins-multiaz'
+        Value: 'jenkins-multiaz-efs'
         PropagateAtLaunch: true
       MinSize: 1
       MaxSize: 1

@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AWS in Action: chapter 6 (firewall 5)'
+Description: 'AWS in Action: chapter 5 (firewall 5)'
 Parameters:
   VPC:
     Description: 'Select the one and only default VPC'

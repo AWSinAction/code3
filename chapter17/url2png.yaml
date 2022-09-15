@@ -196,7 +196,7 @@ Resources:
             yum install -y libfonts chromium
             wget -q -T 60 https://github.com/AWSinAction/code3/archive/refs/heads/main.zip
             unzip main.zip
-            cd code3-main/chapter15/url2png/
+            cd code3-main/chapter14/url2png/
             npm install
             echo "{\"QueueUrl\": \"${SQSQueue}\", \"Bucket\": \"ch17-url2png-${AWS::AccountId}\"}" > config.json
             sudo -u ec2-user AWS_REGION=${AWS::Region} node worker.js

@@ -1,20 +1,13 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AWS in Action: chapter 9 (EBS)'
+Description: 'AWS in Action: chapter 5 (firewall 3)'
 Parameters:
   VPC:
-    Description: 'Just select the one and only default VPC'
+    Description: 'Select the one and only default VPC'
     Type: 'AWS::EC2::VPC::Id'
   Subnet:
-    Description: 'Just select one of the available subnets'
+    Description: 'Select one of the available subnets'
     Type: 'AWS::EC2::Subnet::Id'
-  AttachVolume:
-    Description: 'Should the volume be attached?'
-    Type: String
-    Default: 'yes'
-    AllowedValues:
-    - 'yes'
-    - 'no'
 Mappings:
   RegionMap:
     'eu-north-1':
@@ -51,19 +44,28 @@ Mappings:
       AMI: 'ami-028f2b5ee08012131'
     'us-west-2':
       AMI: 'ami-0e21d4d9303512b8e'
-Conditions:
-  Attached: !Equals [!Ref AttachVolume, 'yes']
 Resources:
   SecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: !Ref 'AWS::StackName'
+      GroupDescription: 'Learn how to protect your EC2 Instance.'
       VpcId: !Ref VPC
       Tags:
       - Key: Name
-        Value: 'AWS in Action: chapter 9 (EBS)'
+        Value: 'AWS in Action: chapter 5 (firewall)'
+      SecurityGroupIngress:
+      - Description: 'allowing inbound ICMP traffic'
+        IpProtocol: icmp
+        FromPort: '-1'
+        ToPort: '-1'
+        CidrIp: '0.0.0.0/0'
+      - Description: 'allowing inbound HTTP traffic'
+        IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: '0.0.0.0/0'
   InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
+    Type: 'AWS::IAM::InstanceProfile'
     Properties:
       Roles:
       - !Ref InstanceRole
@@ -79,57 +81,29 @@ Resources:
           Action: 'sts:AssumeRole'
       ManagedPolicyArns:
       - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
-      Policies:
-      - PolicyName: ec2
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - 'ec2:DescribeVolumes'
-            - 'ec2:CreateSnapshot'
-            - 'ec2:DescribeSnapshots'
-            - 'ec2:DeleteSnapshot'
-            Resource: '*'
   Instance:
     Type: 'AWS::EC2::Instance'
     Properties:
-      IamInstanceProfile: !Ref InstanceProfile # instead of ec2-ssm-core we use a instance profile created in the same template for testability
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       InstanceType: 't2.micro'
+      IamInstanceProfile: !Ref InstanceProfile # instead of ec2-ssm-core we use a instance profile created in the same template for testability
       SecurityGroupIds:
       - !Ref SecurityGroup
       SubnetId: !Ref Subnet
       Tags:
       - Key: Name
-        Value: 'AWS in Action: chapter 9 (EBS)'
+        Value: 'AWS in Action: chapter 5 (firewall)'
       UserData:
         'Fn::Base64': !Sub |
           #!/bin/bash -ex
+          trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}' ERR
+          yum -y install httpd
+          systemctl start httpd
           /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}
     CreationPolicy:
       ResourceSignal:
         Timeout: PT5M
-  Volume:
-    Type: 'AWS::EC2::Volume'
-    Properties:
-      AvailabilityZone: !Sub ${Instance.AvailabilityZone}
-      Size: 5
-      VolumeType: gp2
-      Tags:
-      - Key: Name
-        Value: 'AWS in Action: chapter 9 (EBS)'
-  VolumeAttachment:
-    Type: 'AWS::EC2::VolumeAttachment'
-    Condition: Attached
-    Properties:
-      Device: '/dev/xvdf'
-      InstanceId: !Ref Instance
-      VolumeId: !Ref Volume
 Outputs:
-  InstanceId:
-    Value: !Ref Instance
-    Description: 'Instance id (connect via Session Manager)'
-  VolumeId:
-    Value: !Ref Volume
-    Description: 'ID of the EBS volume'
+  PublicIpAddress:
+    Value: !Sub ${Instance.PublicIp}
+    Description: 'Public IP address'
