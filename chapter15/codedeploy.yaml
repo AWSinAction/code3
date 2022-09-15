@@ -1,22 +1,20 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AWS in Action: chapter 5 (Deploying Etherpad with CloudFormation)'
-Parameters:
-  EtherpadVersion:
-    Type: String
-    Description: 'The Etherpad version'
-    Default: '1.8.18'
-    AllowedValues: ['1.8.18', '1.8.17']
+Description: 'AWS in Action: chapter 15 (Deploying Etherpad with CodeDeploy)'
 Mappings:
   RegionMap:
     'eu-north-1':
       AMI: 'ami-05bc2576a72f22c39'
     'ap-south-1':
       AMI: 'ami-0002bdad91f793433'
+    'eu-west-3':
+      AMI: 'ami-0c73cd1c5347436f3'
     'eu-west-2':
       AMI: 'ami-029ed17b4ea379178'
     'eu-west-1':
       AMI: 'ami-04632f3cef5083854'
+    'ap-northeast-3':
+      AMI: 'ami-0ae88850834d2c589'
     'ap-northeast-2':
       AMI: 'ami-0263588f2531a56bd'
     'ap-northeast-1':
@@ -122,8 +120,8 @@ Resources:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
       Subnets:
-      - !Ref SubnetA
-      - !Ref SubnetB
+      - Ref: SubnetA
+      - Ref: SubnetB
       SecurityGroups:
       - !Ref LoadBalancerSecurityGroup
       Scheme: 'internet-facing'
@@ -142,7 +140,7 @@ Resources:
     Properties:
       HealthCheckIntervalSeconds: 5
       HealthCheckPath: '/'
-      HealthCheckPort: '9001'
+      HealthCheckPort: 9001
       HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 3
       HealthyThresholdCount: 2
@@ -152,6 +150,9 @@ Resources:
       Port: 9001
       Protocol: HTTP
       VpcId: !Ref VPC
+      TargetGroupAttributes:
+      - Key: 'deregistration_delay.timeout_seconds'
+        Value: 10
   LoadBalancerSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -198,6 +199,14 @@ Resources:
             - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
             - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
             Resource: '*'
+          - Effect: Allow
+            Action:
+            - 's3:GetObject*'
+            Resource: !Sub '${ArtifactBucket.Arn}/*'
+          - Effect: Allow
+            Action:
+            - 'ssm:GetParameter'
+            Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/etherpad-codedeploy/database_host'
   LaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
@@ -222,26 +231,11 @@ Resources:
             curl -fsSL https://rpm.nodesource.com/setup_14.x | bash -
             yum install -y nodejs git
 
-            # Fetch, configure, and start Etherpad as non-root user
-            su ec2-user -c '
-            cd /home/ec2-user/
-            git clone --depth 1 --branch ${EtherpadVersion} https://github.com/AWSinAction/etherpad-lite.git
-            cd etherpad-lite/
-            echo "
-            {
-              \"title\": \"Etherpad\",
-              \"dbType\": \"mysql\",
-              \"dbSettings\": {
-                \"host\": \"${Database.Endpoint.Address}\",
-                \"port\": \"3306\",
-                \"database\": \"etherpad\",
-                \"user\": \"etherpad\",
-                \"password\": \"etherpad\"
-              },
-              \"exposeVersion\": true
-            }
-            " > settings.json
-            ./src/bin/run.sh &'
+            # Install CodeDeploy agent
+            yum install -y ruby wget
+            wget https://aws-codedeploy-us-east-1.s3.us-east-1.amazonaws.com/latest/install
+            chmod +x ./install
+            ./install auto
 
             /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
   AutoScalingGroup:
@@ -252,8 +246,8 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
-      MinSize: '1'
-      MaxSize: '2'
+      MinSize: 1
+      MaxSize: 1
       HealthCheckGracePeriod: 300
       HealthCheckType: ELB
       VPCZoneIdentifier:
@@ -270,7 +264,6 @@ Resources:
       AutoScalingRollingUpdate:
         PauseTime: PT10M
         WaitOnResourceSignals: true
-        MinInstancesInService: 1
   DatabaseSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -303,7 +296,48 @@ Resources:
       SubnetIds:
       - Ref: SubnetA
       - Ref: SubnetB
+  ArtifactBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties: {}
+  Application:
+    Type: 'AWS::CodeDeploy::Application'
+    Properties:
+      ApplicationName: 'etherpad-codedeploy'
+      ComputePlatform: 'Server'
+  DeploymentGroup:
+    Type: 'AWS::CodeDeploy::DeploymentGroup'
+    Properties:
+      ApplicationName: !Ref Application
+      DeploymentGroupName: 'etherpad-codedeploy'
+      AutoScalingGroups:
+      - !Ref AutoScalingGroup
+      DeploymentConfigName: 'CodeDeployDefault.AllAtOnce'
+      LoadBalancerInfo:
+        TargetGroupInfoList:
+        - Name: !GetAtt LoadBalancerTargetGroup.TargetGroupName
+      ServiceRoleArn: !GetAtt CodeDeployRole.Arn
+  CodeDeployRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'codedeploy.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+      - 'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole'
+  DatabaseHostParameter:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: '/etherpad-codedeploy/database_host'
+      Type: 'String'
+      Value: !GetAtt 'Database.Endpoint.Address'
 Outputs:
   URL:
     Value: !Sub 'http://${LoadBalancer.DNSName}'
-    Description: 'Etherpad URL'
+    Description: 'The URL of the Etherpad application'
+  ArtifactBucket:
+    Value: !Ref ArtifactBucket
+    Description: 'Name of the artifact bucket'

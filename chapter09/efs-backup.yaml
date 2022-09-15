@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AWS in Action: chapter 10'
+Description: 'AWS in Action: chapter 9'
 Mappings:
   RegionMap:
     'eu-north-1':
@@ -130,8 +130,7 @@ Resources:
     Type: 'AWS::EFS::FileSystem'
     Properties:
       Encrypted: true
-      ThroughputMode: provisioned
-      ProvisionedThroughputInMibps: 1
+      ThroughputMode: bursting
       PerformanceMode: generalPurpose
       FileSystemPolicy:
         Version: '2012-10-17'
@@ -306,9 +305,73 @@ Resources:
     - MountTargetB
   ##########################################################################
   #                                                                        #
+  #                       Backup related resources                         #
+  #                                                                        #
+  ##########################################################################
+  BackupRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'backup.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: backup
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'elasticfilesystem:Backup'
+            - 'elasticfilesystem:DescribeTags'
+            Resource: !Sub 'arn:${AWS::Partition}:elasticfilesystem:${AWS::Region}:${AWS::AccountId}:file-system/${FileSystem}'
+  BackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Properties:
+      BackupVaultName: !Ref 'AWS::StackName'
+  BackupPlan:
+    Type: 'AWS::Backup::BackupPlan'
+    Properties:
+      BackupPlan:
+        BackupPlanName: 'efs-daily'
+        BackupPlanRule:
+        - RuleName: 'efs-daily'
+          TargetBackupVault: !Ref BackupVault
+          Lifecycle:
+            DeleteAfterDays: 30
+          ScheduleExpression: 'cron(0 5 ? * * *)'
+          CompletionWindowMinutes: 1440
+  BackupSelection:
+    Type: 'AWS::Backup::BackupSelection'
+    Properties:
+      BackupPlanId: !Ref BackupPlan
+      BackupSelection:
+        SelectionName: 'efs'
+        IamRoleArn: !GetAtt 'BackupRole.Arn'
+        Resources:
+        - !GetAtt  'FileSystem.Arn'
+  ##########################################################################
+  #                                                                        #
   #                         Monitoring EFS                                 #
   #                                                                        #
   ##########################################################################
+  BurstCreditBalanceTooLowAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: 'Average burst credit balance over last 10 minutes too low, expect a significant performance drop soon.'
+      Namespace: 'AWS/EFS'
+      MetricName: BurstCreditBalance
+      Statistic: Average
+      Period: 600
+      EvaluationPeriods: 1
+      ComparisonOperator: LessThanThreshold
+      Threshold: 192000000000 # 192 GB in Bytes (last hour where you can burst at 100 MB/sec)
+      Dimensions:
+      - Name: FileSystemId
+        Value: !Ref FileSystem
   PercentIOLimitTooHighAlarm:
     Type: 'AWS::CloudWatch::Alarm'
     Properties:

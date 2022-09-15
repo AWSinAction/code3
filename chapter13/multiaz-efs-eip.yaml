@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AWS in Action: chapter 14 (Jenkins running in Auto Scaling Group over multiple AZs, with EFS)'
+Description: 'AWS in Action: chapter 13 (Jenkins running in Auto Scaling Group over multiple AZs, with EFS, with EIP)'
 Parameters:
   JenkinsAdminPassword:
     Description: 'Password for Jenkins admin user'
@@ -162,6 +162,16 @@ Resources:
       SubnetId: !Ref SubnetB
   ##########################################################################
   #                                                                        #
+  #                      fixed public IP address (EIP)                     #
+  #                                                                        #
+  ##########################################################################
+  ElasticIP:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: vpc
+    DependsOn: VPCGatewayAttachment
+  ##########################################################################
+  #                                                                        #
   #                   Auto Scaling Group running Jenkins                   #
   #                                                                        #
   ##########################################################################
@@ -172,7 +182,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
       - Key: Name
-        Value: 'jenkins-multiaz-efs'
+        Value: 'jenkins-multiaz-efs-eip'
       SecurityGroupIngress:
       - IpProtocol: tcp
         FromPort: 8080
@@ -201,6 +211,11 @@ Resources:
           'Fn::Base64': !Sub |
             #!/bin/bash -ex
             trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}' ERR
+
+            # Attaching EIP
+            INSTANCE_ID="$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
+            aws --region ${AWS::Region} ec2 associate-address --instance-id $INSTANCE_ID --allocation-id ${ElasticIP.AllocationId} --allow-reassociation
+            sleep 30
 
             # Installing Jenkins
             amazon-linux-extras enable epel=7.11 && yum -y clean metadata
@@ -235,7 +250,7 @@ Resources:
         Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
       Tags:
       - Key: Name
-        Value: 'jenkins-multiaz-efs'
+        Value: 'jenkins-multiaz-efs-eip'
         PropagateAtLaunch: true
       MinSize: 1
       MaxSize: 1
@@ -256,10 +271,16 @@ Resources:
         Statement:
         - Effect: Allow
           Principal:
-            Service:
-            - 'ec2.amazonaws.com'
+            Service: 'ec2.amazonaws.com'
           Action: 'sts:AssumeRole'
       Policies:
+      - PolicyName: ec2
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Action: 'ec2:AssociateAddress'
+            Resource: '*'
+            Effect: Allow
       - PolicyName: ssm
         PolicyDocument:
           Version: '2012-10-17'
@@ -276,6 +297,9 @@ Resources:
       Roles:
       - !Ref IamRole
 Outputs:
+  JenkinsURL:
+    Description: 'URL to access web interface of Jenkins server.'
+    Value: !Sub 'http://${ElasticIP}:8080'
   User:
     Description: 'Administrator user for Jenkins.'
     Value: admin

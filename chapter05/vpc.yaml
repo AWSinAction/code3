@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AWS in Action: chapter 6 (VPC)'
+Description: 'AWS in Action: chapter 5 (VPC)'
 Mappings:
   RegionMap:
     'eu-north-1':
@@ -55,7 +55,7 @@ Resources:
         CidrIp: '0.0.0.0/0'
       Tags:
       - Key: Name
-        Value: 'AWS in Action: chapter 6 (VPC)'
+        Value: 'AWS in Action: chapter 5 (VPC)'
   VPC:
     Type: 'AWS::EC2::VPC'
     Properties:
@@ -63,7 +63,7 @@ Resources:
       EnableDnsHostnames: 'true'
       Tags:
       - Key: Name
-        Value: 'AWS in Action: chapter 6 (VPC)'
+        Value: 'AWS in Action: chapter 5 (VPC)'
   InternetGateway:
     Type: 'AWS::EC2::InternetGateway'
     Properties: {}

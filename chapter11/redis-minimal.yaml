@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AWS in Action: chapter 12 (minimal)'
+Description: 'AWS in Action: chapter 11 (minimal)'
 Parameters:
   VPC:
     Description: 'Just select the one and only default VPC'
