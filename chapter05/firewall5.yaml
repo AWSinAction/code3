@@ -201,6 +201,7 @@ Resources:
           trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource Backend --region ${AWS::Region}' ERR
           yum -y install httpd
           systemctl start httpd
+          echo '<html><title>Hello AWS in Action!</title><body><h1>Hello AWS in Action!</h1></body></html>' > /var/www/html/index.html
           /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource Backend --region ${AWS::Region}
     CreationPolicy:
       ResourceSignal:
