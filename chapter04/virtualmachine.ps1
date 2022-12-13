@@ -14,7 +14,7 @@ $SUBNETID=aws ec2 describe-subnets --filters "Name=vpc-id, Values=$VPCID" --quer
 $INSTANCEID=aws ec2 run-instances --image-id $AMIID --instance-type t2.micro --subnet-id $SUBNETID --iam-instance-profile "Name=ec2-ssm-core" --query "Instances[0].InstanceId" --output text
 Write-Host "waiting for $INSTANCEID ..."
 aws ec2 wait instance-running --instance-ids $INSTANCEID
-Write-Host "$INSTANCEID is is up and running"
+Write-Host "$INSTANCEID is up and running"
 Write-Host "connect to the instance using Session Manager"
 Write-Host "https://console.aws.amazon.com/systems-manager/session-manager/$INSTANCEID"
 Write-Host "Press [Enter] key to terminate $INSTANCEID ..."
