@@ -221,8 +221,8 @@ Resources:
             amazon-linux-extras enable epel=7.11 && yum -y clean metadata
             yum install -y epel-release && yum -y clean metadata
             yum install -y java-11-amazon-corretto-headless daemonize amazon-efs-utils
-            wget -q -T 60 http://ftp-chi.osuosl.org/pub/jenkins/redhat-stable/jenkins-2.319.1-1.1.noarch.rpm
-            rpm --install jenkins-2.319.1-1.1.noarch.rpm
+            wget -q -T 60 http://ftp-chi.osuosl.org/pub/jenkins/redhat-stable/jenkins-2.375.1-1.1.noarch.rpm
+            rpm --install jenkins-2.375.1-1.1.noarch.rpm
             
             # Mounting EFS volume
             mkdir -p /var/lib/jenkins
