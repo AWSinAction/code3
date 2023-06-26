@@ -187,7 +187,7 @@ Resources:
       DBInstanceClass: 'db.t2.micro'
       DBName: discourse
       Engine: postgres
-      EngineVersion: '12.10'
+      EngineVersion: '12.15'
       MasterUsername: discourse
       MasterUserPassword: discourse
       VPCSecurityGroups:
