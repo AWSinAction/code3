@@ -48,6 +48,26 @@ async function receive() {
 };
 
 async function run() {
+  // Workaround as AWS enabled public access block for all new buckets in April 2023
+  console.log('Disabling public access block.');
+  await s3.putPublicAccessBlock({
+    Bucket: config.Bucket,
+    PublicAccessBlockConfiguration: {
+      BlockPublicAcls: false,
+      BlockPublicPolicy: false,
+      IgnorePublicAcls: false,
+      RestrictPublicBuckets: false
+    }
+  }).promise();
+  console.log('Enabling ACLs.');
+  await s3.putBucketOwnershipControls({
+    Bucket: config.Bucket,
+    OwnershipControls: {
+      Rules: [{
+        ObjectOwnership: 'BucketOwnerPreferred'
+      }]
+    }
+  }).promise();
   while(true) {
     const message = await receive();
     if (message) {
