@@ -144,7 +144,9 @@ Resources:
           Statement:
           - Effect: Allow
             Action: 's3:*'
-            Resource: !Sub 'arn:aws:s3:::ch17-url2png-${AWS::AccountId}/*'
+            Resource:
+            - !Sub 'arn:aws:s3:::ch17-url2png-${AWS::AccountId}'
+            - !Sub 'arn:aws:s3:::ch17-url2png-${AWS::AccountId}/*'
           - Effect: Allow
             Action: 'sqs:*'
             Resource: !Sub 'arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${SQSQueue.QueueName}'
