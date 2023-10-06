@@ -12,9 +12,9 @@ defaults:
     shell: bash
 jobs:
   latest:
-    runs-on: ['hyperenv', 'medium']
+    runs-on: ubuntu-22.04
     steps:
-    - uses: 'actions/checkout@v4'
+    - uses: actions/checkout@v4
     - uses: aws-actions/configure-aws-credentials@v4.0.1
       with:
         role-to-assume: arn:aws:iam::859548834666:role/github-openid-connect
