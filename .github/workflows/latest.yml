@@ -22,4 +22,4 @@ jobs:
         aws-region: us-east-1
     - name: latest
       run: |
-        aws s3 sync --delete --exact-timestamps --exclude ".git/*" --exclude ".github/*" s3://awsinaction-code3/
+        aws s3 sync --delete --exact-timestamps --exclude ".git/*" --exclude ".github/*" ./ s3://awsinaction-code3/
