@@ -17,7 +17,7 @@ defaults:
     shell: bash
 jobs:
   run:
-    runs-on: ['hyperenv', 'medium']
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
     - uses: aws-actions/configure-aws-credentials@v4.0.1
