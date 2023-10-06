@@ -1,0 +1,25 @@
+name: Latest
+on:
+  push:
+    branch:
+    - main
+permissions:
+  id-token: write
+  contents: read
+concurrency: latest
+defaults:
+  run:
+    shell: bash
+jobs:
+  latest:
+    runs-on: ['hyperenv', 'medium']
+    steps:
+    - uses: 'actions/checkout@v4'
+    - uses: aws-actions/configure-aws-credentials@v4.0.1
+      with:
+        role-to-assume: arn:aws:iam::859548834666:role/github-openid-connect
+        role-session-name: github-actions-aws-in-action-code3
+        aws-region: us-east-1
+    - name: latest
+      run: |
+        aws s3 sync --delete --exact-timestamps --exclude ".git/*" --exclude ".github/*" s3://awsinaction-code3/
