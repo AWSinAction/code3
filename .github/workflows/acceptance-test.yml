@@ -1,0 +1,39 @@
+---
+name: Acceptenace Test
+on:
+  workflow_dispatch:
+    inputs:
+      tests:
+        required: true
+        type: choice
+        default: '*'
+        options: # compile list with cd test/src && find . -name '*Test*' -execdir basename {} .java ';' | sort
+        - '*'
+        - Chapter02Test
+        - Chapter04Test
+        - Chapter05Test
+        - Chapter08Test
+        - Chapter09Test
+        - Chapter10Test
+        - Chapter11Test
+        - Chapter13Test
+        - Chapter14Test
+        - Chapter15Test
+        - Chapter17Test
+        - Chapter18Test
+      deletion-policy:
+        required: true
+        type: choice
+        default: delete
+        options:
+        - delete
+        - retain
+defaults:
+  run:
+    shell: bash
+jobs:
+  acceptance-test:
+    uses: ./.github/workflows/acceptance-test-run.yml
+    with:
+      tests: ${{ inputs.tests }}
+      deletion-policy: ${{ inputs.deletion-policy }}

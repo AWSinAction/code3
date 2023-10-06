@@ -1,0 +1,21 @@
+---
+name: Acceptenace Tests
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+    - master
+    paths:
+    - '.github/workflows/acceptance-tests.yml'
+    - '*.yaml'
+    - 'test/**'
+concurrency: acceptenace-tests-${{ github.ref }}
+defaults:
+  run:
+    shell: bash
+jobs:
+  acceptance-test:
+    uses: ./.github/workflows/acceptance-test-run.yml
+    with:
+      tests: '*'
+      deletion-policy: delete

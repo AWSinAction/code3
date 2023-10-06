@@ -1,0 +1,45 @@
+---
+name: Acceptenace Test Run
+on:
+  workflow_call:
+    inputs:
+      tests:
+        required: true
+        type: string
+      deletion-policy:
+        required: true
+        type: string # delete/retain
+permissions:
+  id-token: write
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  run:
+    runs-on: ['hyperenv', 'medium']
+    steps:
+    - uses: actions/checkout@v4
+    - uses: aws-actions/configure-aws-credentials@v4.0.1
+      with:
+        role-to-assume: arn:aws:iam::859548834666:role/github-openid-connect
+        role-session-name: github-actions-aws-in-action-code3
+        role-duration-seconds: 21600
+        aws-region: us-east-1
+    - uses: actions/setup-java@v3
+      with:
+        distribution: corretto
+        java-version: '8'
+        cache: maven
+    - working-directory: test
+      env:
+        DELETION_POLICY: ${{ inputs.deletion-policy }}
+        TEMPLATE_DIR: ../
+      run: mvn -B clean test site -Dtest=${{ inputs.tests }} -Dsurefire.reportNameSuffix=us-east-1
+    - uses: actions/upload-artifact@v3
+      if: failure()
+      with:
+        name: surefire-reports-us-east-1
+        path: |
+          test/target/surefire-reports/
+          test/target/site/
