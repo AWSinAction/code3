@@ -22,7 +22,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: aws-actions/configure-aws-credentials@v4.0.1
       with:
-        role-to-assume: arn:aws:iam::859548834666:role/github-openid-connect
+        role-to-assume: arn:aws:iam::068189904525:role/github-openid-connect
         role-session-name: github-actions-aws-in-action-code3
         role-duration-seconds: 21600
         aws-region: us-east-1
@@ -39,7 +39,7 @@ jobs:
     - uses: actions/upload-artifact@v3
       if: failure()
       with:
-        name: surefire-reports-us-east-1
+        name: acceptance-test-run-us-east-1
         path: |
           test/target/surefire-reports/
           test/target/site/
