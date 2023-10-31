@@ -35,7 +35,7 @@ jobs:
       env:
         DELETION_POLICY: ${{ inputs.deletion-policy }}
         TEMPLATE_DIR: ../
-      run: mvn -B clean test -Dtest=${{ inputs.tests }} -Dsurefire.reportNameSuffix=us-east-1; mvn surefire-report:report
+      run: mvn -B -q surefire-report:report -Dtest=${{ inputs.tests }} -Dsurefire.reportNameSuffix=us-east-1
     - uses: actions/upload-artifact@v3
       if: failure()
       with:
