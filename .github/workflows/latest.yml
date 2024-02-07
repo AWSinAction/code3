@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
-    - uses: aws-actions/configure-aws-credentials@v4.0.1
+    - uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: arn:aws:iam::859548834666:role/github-openid-connect
         role-session-name: github-actions-aws-in-action-code3

@@ -20,13 +20,13 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
-    - uses: aws-actions/configure-aws-credentials@v4.0.1
+    - uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: arn:aws:iam::068189904525:role/github-openid-connect
         role-session-name: github-actions-aws-in-action-code3
         role-duration-seconds: 21600
         aws-region: us-east-1
-    - uses: actions/setup-java@v3
+    - uses: actions/setup-java@v4
       with:
         distribution: corretto
         java-version: '8'
@@ -36,7 +36,7 @@ jobs:
         DELETION_POLICY: ${{ inputs.deletion-policy }}
         TEMPLATE_DIR: ../
       run: mvn -B -q surefire-report:report -Dtest=${{ inputs.tests }} -Dsurefire.reportNameSuffix=us-east-1
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       if: failure()
       with:
         name: acceptance-test-run-us-east-1
