@@ -217,7 +217,8 @@ Resources:
             '/tmp/config':
               content: |
                 #!/bin/bash -ex
-                PRIVATE_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
+                TOKEN=`curl -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" "http://169.254.169.254/latest/api/token"`
+                PRIVATE_IP=`curl -H "X-aws-ec2-metadata-token: $TOKEN" -s -m 60 "http://169.254.169.254/latest/meta-data/local-ipv4"`
                 echo "<html><head><title>$PRIVATE_IP</title></head><body><h1>$PRIVATE_IP</h1></body></html>" > index.html
               mode: '000500'
               owner: root

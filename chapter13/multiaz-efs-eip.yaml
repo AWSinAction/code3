@@ -213,7 +213,9 @@ Resources:
             trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}' ERR
 
             # Attaching EIP
-            INSTANCE_ID="$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
+            TOKEN=`curl -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" "http://169.254.169.254/latest/api/token"`
+            INSTANCE_ID=`curl -H "X-aws-ec2-metadata-token: $TOKEN" -s -m 60 "http://169.254.169.254/latest/meta-data/instance-id"`
+
             aws --region ${AWS::Region} ec2 associate-address --instance-id $INSTANCE_ID --allocation-id ${ElasticIP.AllocationId} --allow-reassociation
             sleep 30
 
