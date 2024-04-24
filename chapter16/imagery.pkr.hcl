@@ -12,7 +12,7 @@ source "amazon-ebs" "imagery" {
   tags = {
     Name = "awsinaction-imagery"
   }
-  instance_type = "t2.micro"
+  instance_type = "t3.micro"
   region        = "us-east-1"
   source_ami_filter {
     filters = {

@@ -11,7 +11,7 @@ module.exports = (amiId, subnetId, cb) => {
     ImageId: amiId,
     MinCount: 1,
     MaxCount: 1,
-    InstanceType: 't2.micro',
+    InstanceType: 't3.micro',
     SubnetId: subnetId
   }, (err) => {
     if (err) {

@@ -96,7 +96,7 @@ Resources:
     Properties:
       IamInstanceProfile: !Ref InstanceProfile # instead of ec2-ssm-core we use a instance profile created in the same template for testability
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceType: 't2.micro'
+      InstanceType: 't3.micro'
       SecurityGroupIds:
       - !Ref SecurityGroup
       SubnetId: !Ref Subnet

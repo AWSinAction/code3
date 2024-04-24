@@ -191,7 +191,7 @@ Resources:
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         Monitoring:
           Enabled: false
-        InstanceType: 't2.micro'
+        InstanceType: 't3.micro'
         NetworkInterfaces:
         - AssociatePublicIpAddress: true
           DeviceIndex: 0
