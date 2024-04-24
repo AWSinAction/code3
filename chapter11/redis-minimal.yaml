@@ -68,7 +68,7 @@ Resources:
   Cache:
     Type: 'AWS::ElastiCache::CacheCluster'
     Properties:
-      CacheNodeType: 'cache.t2.micro'
+      CacheNodeType: 'cache.t3.micro'
       CacheSubnetGroupName: !Ref CacheSubnetGroup
       Engine: redis
       NumCacheNodes: 1
@@ -109,7 +109,7 @@ Resources:
     Type: 'AWS::EC2::Instance'
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceType: 't2.micro'
+      InstanceType: 't3.micro'
       IamInstanceProfile: !Ref InstanceProfile
       NetworkInterfaces:
       - AssociatePublicIpAddress: true

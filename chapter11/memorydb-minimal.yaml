@@ -218,7 +218,7 @@ Resources:
     Type: 'AWS::EC2::Instance'
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceType: 't2.micro'
+      InstanceType: 't3.micro'
       IamInstanceProfile: !Ref InstanceProfile
       NetworkInterfaces:
       - AssociatePublicIpAddress: true

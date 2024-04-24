@@ -11,8 +11,8 @@ Parameters:
   InstanceType:
     Description: 'Select one of the possible instance types'
     Type: String
-    Default: 't2.micro'
-    AllowedValues: ['t2.micro', 't2.small', 't2.medium']
+    Default: 't3.micro'
+    AllowedValues: ['t3.micro', 't3.small', 't3.medium']
 Mappings:
   RegionMap:
     'eu-north-1':

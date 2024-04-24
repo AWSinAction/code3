@@ -94,7 +94,7 @@ Resources:
     Properties:
       IamInstanceProfile: !Ref InstanceProfile
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceType: 't2.micro'
+      InstanceType: 't3.micro'
       SecurityGroupIds:
       - !Ref SecurityGroup
       SubnetId: !Ref Subnet
