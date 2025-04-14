@@ -48,7 +48,7 @@ Resources:
   SecurityGroupProxy:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: 'Allowing incoming HTTP and ICPM from anywhere.'
+      GroupDescription: 'Allowing incoming HTTP and ICMP from anywhere.'
       VpcId: !Ref VPC
       SecurityGroupIngress:
       - Description: 'allowing inbound ICMP traffic'

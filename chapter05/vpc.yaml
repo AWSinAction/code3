@@ -60,13 +60,11 @@ Resources:
     Type: 'AWS::EC2::VPC'
     Properties:
       CidrBlock: '10.0.0.0/16'
-      EnableDnsHostnames: 'true'
       Tags:
       - Key: Name
         Value: 'AWS in Action: chapter 5 (VPC)'
   InternetGateway:
     Type: 'AWS::EC2::InternetGateway'
-    Properties: {}
   VPCGatewayAttachment:
     Type: 'AWS::EC2::VPCGatewayAttachment'
     Properties:
@@ -77,7 +75,6 @@ Resources:
     Properties:
       AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: '10.0.0.0/24'
-      MapPublicIpOnLaunch: true
       VpcId: !Ref VPC
       Tags:
       - Key: Name
